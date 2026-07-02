@@ -1,0 +1,5 @@
+## Managed component dependencies (ESP-IDF component manager).
+## Fetched into managed_components/ on first configure — that dir is gitignored.
+dependencies:
+  # LittleFS VFS for the 'storage' partition (web assets). See docs/ARCHITECTURE.md §4.
+  joltwallet/littlefs: "^1.14.8"

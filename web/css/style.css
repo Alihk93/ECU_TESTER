@@ -1,0 +1,29 @@
+/* ECU_TESTER dashboard — minimal landscape/fullscreen shell.
+   Visual identity (cyberpunk/automotive) to be developed; salvage S-ECU art per D0. */
+:root {
+  --bg: #0a0e14;
+  --panel: #121821;
+  --line: #1f2a37;
+  --text: #e6edf3;
+  --accent: #ffb020;   /* amber */
+  --accent2: #22d3ee;  /* teal  */
+  --ok: #34d399;
+  --down: #ef4444;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: hidden; }
+.dashboard { height: 100vh; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.title { font-weight: 700; letter-spacing: 0.14em; color: var(--accent); }
+.conn { font-family: "JetBrains Mono", monospace; font-size: 12px; padding: 2px 8px;
+  border-radius: 4px; }
+.conn--up { color: var(--ok); }
+.conn--down { color: var(--down); }
+.grid { flex: 1; display: grid; gap: 10px; padding: 10px;
+  grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(120px, auto); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; }
+.panel--wide { grid-column: span 4; }
+#scope-canvas { width: 100%; height: 220px; display: block; }

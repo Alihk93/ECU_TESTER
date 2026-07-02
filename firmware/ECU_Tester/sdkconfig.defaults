@@ -1,0 +1,19 @@
+# ECU_TESTER — build defaults. Do NOT retune silently (CLAUDE.md §6).
+# WebSocket support lives inside esp_http_server — this line is mandatory or
+# httpd_ws_* will not link (learned the hard way on S-ECU).
+CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# Target module: ESP32-S3-WROOM-1 N16R8 (16MB flash, 8MB octal PSRAM)
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+
+# Custom partition table (LittleFS storage for web assets)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# FreeRTOS: keep tick at 1kHz for responsive scheduling of the acq/net tasks
+CONFIG_FREERTOS_HZ=1000

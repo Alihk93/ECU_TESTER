@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ECU_TESTER</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Landscape, fullscreen dashboard. Runs in a Chromium kiosk (OPEN_DECISIONS D8). -->
+  <div id="app" class="dashboard">
+    <header class="topbar">
+      <span class="title">ECU_TESTER</span>
+      <span id="conn" class="conn conn--down">disconnected</span>
+    </header>
+
+    <!-- Component mount points. Each is filled by a JS module (docs/ADDING_COMPONENTS.md).
+         The .qml names in the spec map to these web components — QML does not run on
+         the ESP32-S3. -->
+    <main class="grid">
+      <section id="gauges"     class="panel" aria-label="Analog gauges (MAF/MAP/IAT)"></section>
+      <section id="voltages"   class="panel" aria-label="Voltage meters (ECU/Sensor)"></section>
+      <section id="coils"      class="panel" aria-label="Ignition coils"></section>
+      <section id="injectors"  class="panel" aria-label="Injectors (regular + GDI)"></section>
+      <section id="status"     class="panel" aria-label="Digital status indicators"></section>
+      <section id="scope"      class="panel panel--wide" aria-label="CKP/CMP oscilloscope">
+        <canvas id="scope-canvas"></canvas>
+      </section>
+      <section id="controls"   class="panel panel--wide" aria-label="Manual sim controls"></section>
+    </main>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
