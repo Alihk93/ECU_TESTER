@@ -1,0 +1,10 @@
+{
+  "type": "pm-sync",
+  "code": "ECU_TESTER",
+  "name": "ECU_TESTER",
+  "repo": "Alihk93/ECU_TESTER",
+  "lastCommit": "a0873dc · Add ECU_TESTER scaffold; make firmware build clean for esp32s3",
+  "lastCommitDate": "2026-07-02T19:43:24+03:00",
+  "openIssues": null,
+  "lastSync": "2026-07-02T16:43:30.942Z"
+}
