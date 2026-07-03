@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "a0873dc · Add ECU_TESTER scaffold; make firmware build clean for esp32s3",
-  "lastCommitDate": "2026-07-02T19:43:24+03:00",
+  "lastCommit": "1b705b5 · Commit GPIO pinmap in board_config.h (mirror of hardware/README.md)",
+  "lastCommitDate": "2026-07-03T09:18:33+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-02T16:43:30.942Z"
+  "lastSync": "2026-07-03T06:18:46.087Z"
 }
