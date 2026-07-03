@@ -11,10 +11,11 @@ export class EcuSocket {
     this._retry = 500; // ms, backs off to 5s
   }
   connect() {
+    this.onStatus("connecting");
     this.ws = new WebSocket(this.url);
     this.ws.binaryType = "arraybuffer";
-    this.ws.onopen = () => { this._retry = 500; this.onStatus(true); };
-    this.ws.onclose = () => { this.onStatus(false); this._reconnect(); };
+    this.ws.onopen = () => { this._retry = 500; this.onStatus("connected"); };
+    this.ws.onclose = () => { this.onStatus("disconnected"); this._reconnect(); };
     this.ws.onerror = () => this.ws && this.ws.close();
     this.ws.onmessage = (ev) => {
       const frame = decodeFrame(ev.data); // null => CRC/format failure, dropped

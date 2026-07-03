@@ -8,14 +8,11 @@
 </head>
 <body>
   <!-- Landscape kiosk dashboard (OPEN_DECISIONS D8). Free-canvas: modules live on a
-       fixed design-space #stage that scales to FHD/4K; drag/resize in Edit mode. -->
+       fixed design-space #stage that scales to FHD/4K. Real-time device data only. -->
   <header class="topbar">
     <span class="brand"><b>ECU</b>_TESTER <em>· AL-AYED</em></span>
     <div class="tb-actions">
-      <button id="src" class="tb-btn" title="Toggle data source">Live</button>
-      <button id="edit" class="tb-btn" title="Edit / lock layout">Edit</button>
-      <button id="reset" class="tb-btn" title="Reset layout to default">Reset</button>
-      <span id="conn" class="conn conn--sim">simulation</span>
+      <span id="conn" class="conn conn--connecting">connecting…</span>
     </div>
   </header>
 

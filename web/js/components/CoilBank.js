@@ -1,5 +1,6 @@
-/* ECU_TESTER :: CoilBank.js — 8 ignition-coil cells (coil.png) that spark-flash
-   on activity. `coils` bits are latched-since-last-frame, so a set bit = flash. */
+/* ECU_TESTER :: CoilBank.js — ignition-coil cells (coil.png) that spark-flash
+   on activity; cylinder count via opts.count. `coils` bits are latched-since-
+   last-frame, so a set bit = flash. */
 const IMG = "assets/img/coil.png";
 
 export class CoilBank {

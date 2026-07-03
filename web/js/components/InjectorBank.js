@@ -1,11 +1,11 @@
-/* ECU_TESTER :: InjectorBank.js — 8 injector cells (port or GDI photo) with an
+/* ECU_TESTER :: InjectorBank.js — injector cells (port or GDI photo) with an
    animated spray sprite on activity. Reused for injReg (injector.png) and
-   injGdi (gdi.png) via opts.img. */
+   injGdi (gdi.png) via opts.img; cylinder count via opts.count. */
 const SPRAY = "assets/img/spray.png";
 
 export class InjectorBank {
   constructor(mount, opts) {
-    this.count = 8;
+    this.count = opts.count || 8;
     this.img = "assets/img/" + opts.img;
     this.cells = [];
     const grid = document.createElement("div");
