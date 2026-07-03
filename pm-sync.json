@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "1b705b5 · Commit GPIO pinmap in board_config.h (mirror of hardware/README.md)",
-  "lastCommitDate": "2026-07-03T09:18:33+03:00",
+  "lastCommit": "016a5b3 · Add web dashboard components, processed assets, and dev tooling",
+  "lastCommitDate": "2026-07-03T09:32:40+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-03T06:18:46.087Z"
+  "lastSync": "2026-07-03T06:32:54.532Z"
 }
