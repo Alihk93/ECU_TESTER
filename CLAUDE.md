@@ -223,13 +223,27 @@ managed component (`joltwallet/littlefs`, resolved 1.22.1) is wired via
 the `hardware/README.md` GPIO map (Sensor-V ADC1 GPIO4; CKP/CMP1/CMP2 = 5/6/7; I²C
 SDA 47 / SCL 21 for ADS1115+MCP23017; 74HC165 QH/CLK/LD = 16/17/18).
 
-**Bench (first hardware bring-up):** the SoftAP path is implemented and
+**Bench (hardware bring-up):** the SoftAP + asset-serving path is implemented and
 **verified on the device** — `wifi_softap_start()` brings up `esp_netif` + the default
 event loop + Wi-Fi AP (`ECU_TESTER` / WPA2) at `10.10.10.10`, and the board boots
 cleanly and stays up. (Earlier the stub skipped `esp_netif_init()`, so `httpd_start()`
 hit lwIP with no TCP/IP task and the chip reboot-looped on an "Invalid mbox" assert.)
+`littlefs_mount()` + `static_get_handler()` now serve the dashboard: a LittleFS image
+is built from `web/` at compile time (`littlefs_create_partition_image(... FLASH_IN_PROJECT)`
+in `main/CMakeLists.txt`) and flashed with the app; the handler streams files chunked
+with per-type MIME + `Cache-Control` (long for assets, `no-cache` for HTML) behind a
+`/*` wildcard route, with the exact `/ws` route registered first. Boot log confirms
+`LittleFS mounted at /web — ~1.19 MB used` and `web root OK: index.html`.
+
+**Web dashboard:** the full sim-driven cobalt dashboard is **built and served from the
+device** — 12 draggable/persisted modules (clean-cluster SVG gauges, photo-based
+coils/injectors/IAC on transparent PNGs, voltage meters, status tell-tales, CKP/CMP
+oscilloscope), driven by a client-side simulator that emits `decodeFrame`-shaped frames
+so the sim→live source swap is a one-liner. Assets are background-removed + optimized by
+`tools/prep_assets.sh`.
 
 **Still open (not a scaffold gap — real work):** the acquisition path (`acq_task` +
-ADC/expander/capture drivers) and asset serving (`littlefs_mount` + `static_get_handler`)
-are still `TODO` stubs, and the web dashboard is a work in progress. The WebSocket
-telemetry/command handlers are not wired to real data yet.
+ADC/expander/capture drivers) is still a `TODO` stub, and the WebSocket
+telemetry/command handlers are not wired to real data yet (the dashboard currently runs
+on its own simulator; the live `EcuSocket` path is written but untested against device
+frames).

@@ -16,6 +16,9 @@
  *        -> spawn acq_task, net_task.
  * =============================================================================*/
 #include <string.h>
+#include <strings.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -26,6 +29,7 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
+#include "esp_littlefs.h"
 
 #include "board_config.h"
 #include "protocol.h"
@@ -83,13 +87,40 @@ static void wifi_softap_start(void)
 }
 
 /* =============================================================================
- *  LittleFS  — TODO: mount the 'storage' partition; assets served with a long
- *  Cache-Control so the browser caches heavy files (docs/ARCHITECTURE.md §4).
+ *  LittleFS — mount the 'storage' partition (web assets) under WEB_BASE_PATH.
+ *  The image is built from web/ at compile time and flashed with the app
+ *  (littlefs_create_partition_image ... FLASH_IN_PROJECT in main/CMakeLists.txt).
  * ===========================================================================*/
+#define WEB_BASE_PATH   "/web"
+
 static void littlefs_mount(void)
 {
-    // TODO: esp_vfs_littlefs_register({ .partition_label="storage", ... });
-    ESP_LOGW(TAG, "littlefs_mount: TODO (partition 'storage')");
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path              = WEB_BASE_PATH,
+        .partition_label        = "storage",
+        .format_if_mount_failed = false,   /* a blank FS is a flashing bug, not a runtime one */
+        .dont_mount             = false,
+    };
+    esp_err_t err = esp_vfs_littlefs_register(&conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "LittleFS mount failed (%s) — did you flash the 'storage' image?",
+                 esp_err_to_name(err));
+        return;
+    }
+    size_t total = 0, used = 0;
+    if (esp_littlefs_info(conf.partition_label, &total, &used) == ESP_OK)
+        ESP_LOGI(TAG, "LittleFS mounted at %s — %u/%u bytes used", WEB_BASE_PATH,
+                 (unsigned)used, (unsigned)total);
+
+    /* Sanity: confirm the dashboard entrypoint is present and readable. */
+    FILE *f = fopen(WEB_BASE_PATH "/index.html", "r");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        ESP_LOGI(TAG, "web root OK: index.html (%ld bytes)", ftell(f));
+        fclose(f);
+    } else {
+        ESP_LOGW(TAG, "index.html not found — 'storage' image not flashed?");
+    }
 }
 
 /* =============================================================================
@@ -107,22 +138,89 @@ static esp_err_t ws_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Static-asset handler for everything else (index.html, css, js, svg, photo). */
+/* Map a file extension to a Content-Type. */
+static const char *mime_for(const char *path)
+{
+    const char *d = strrchr(path, '.');
+    if (!d)                        return "application/octet-stream";
+    if (!strcasecmp(d, ".html"))   return "text/html";
+    if (!strcasecmp(d, ".css"))    return "text/css";
+    if (!strcasecmp(d, ".js"))     return "text/javascript";
+    if (!strcasecmp(d, ".json"))   return "application/json";
+    if (!strcasecmp(d, ".png"))    return "image/png";
+    if (!strcasecmp(d, ".jpg") ||
+        !strcasecmp(d, ".jpeg"))   return "image/jpeg";
+    if (!strcasecmp(d, ".svg"))    return "image/svg+xml";
+    if (!strcasecmp(d, ".ico"))    return "image/x-icon";
+    if (!strcasecmp(d, ".woff2"))  return "font/woff2";
+    return "application/octet-stream";
+}
+
+/* Static-asset handler: map req->uri to a LittleFS file and stream it.
+ * "/" -> "/index.html". Heavy assets get a long Cache-Control so the browser
+ * caches them (docs/ARCHITECTURE.md §4); HTML revalidates so UI updates show. */
+#define WEB_URI_MAX     256
+#define WEB_PATH_MAX    (sizeof(WEB_BASE_PATH) + WEB_URI_MAX)
+#define WEB_CHUNK       2048
+
 static esp_err_t static_get_handler(httpd_req_t *req)
 {
-    // TODO: map req->uri to a LittleFS path, set Content-Type + Cache-Control,
-    //       stream the file. Default "/" -> "/index.html".
-    return ESP_OK;
+    char uri[WEB_URI_MAX];
+    if (strlcpy(uri, req->uri, sizeof(uri)) >= sizeof(uri)) {
+        httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, NULL);
+        return ESP_FAIL;
+    }
+    char *qs = strchr(uri, '?');          /* drop any query string */
+    if (qs) *qs = '\0';
+    if (strstr(uri, "..")) {              /* refuse path traversal */
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, NULL);
+        return ESP_FAIL;
+    }
+    if (uri[0] == '\0' || !strcmp(uri, "/"))
+        strlcpy(uri, "/index.html", sizeof(uri));
+
+    char path[WEB_PATH_MAX];
+    snprintf(path, sizeof(path), "%s%s", WEB_BASE_PATH, uri);
+
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        ESP_LOGW(TAG, "404 %s", path);
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+        return ESP_FAIL;
+    }
+
+    const char *ext = strrchr(path, '.');
+    int is_html = (ext && !strcasecmp(ext, ".html"));
+    httpd_resp_set_type(req, mime_for(path));
+    httpd_resp_set_hdr(req, "Cache-Control",
+                       is_html ? "no-cache" : "public, max-age=31536000");
+
+    char *buf = malloc(WEB_CHUNK);
+    if (!buf) { fclose(f); httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, NULL); return ESP_FAIL; }
+
+    size_t n;
+    esp_err_t rc = ESP_OK;
+    while ((n = fread(buf, 1, WEB_CHUNK, f)) > 0) {
+        if (httpd_resp_send_chunk(req, buf, n) != ESP_OK) { rc = ESP_FAIL; break; }
+    }
+    free(buf);
+    fclose(f);
+    if (rc == ESP_OK) httpd_resp_send_chunk(req, NULL, 0);   /* terminate response */
+    return rc;
 }
 
 static void httpd_start_all(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.max_open_sockets = 8;
+    cfg.stack_size       = 8192;                    /* headroom for file streaming */
+    cfg.uri_match_fn     = httpd_uri_match_wildcard;/* required for the wildcard route */
+    cfg.lru_purge_enable = true;                    /* evict idle sockets under pressure */
     if (httpd_start(&s_httpd, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "httpd_start failed");
         return;
     }
+    /* Register the exact "/ws" route BEFORE the wildcard catch-all so it wins. */
     httpd_uri_t ws = { .uri="/ws", .method=HTTP_GET, .handler=ws_handler, .is_websocket=true };
     httpd_uri_t st = { .uri="/*",  .method=HTTP_GET, .handler=static_get_handler };
     httpd_register_uri_handler(s_httpd, &ws);
