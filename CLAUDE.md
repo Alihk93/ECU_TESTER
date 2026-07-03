@@ -235,15 +235,27 @@ with per-type MIME + `Cache-Control` (long for assets, `no-cache` for HTML) behi
 `/*` wildcard route, with the exact `/ws` route registered first. Boot log confirms
 `LittleFS mounted at /web — ~1.19 MB used` and `web root OK: index.html`.
 
-**Web dashboard:** the full sim-driven cobalt dashboard is **built and served from the
-device** — 12 draggable/persisted modules (clean-cluster SVG gauges, photo-based
+**Web dashboard:** the real-time cobalt dashboard is **built and served from the
+device** — 11 fixed-layout modules (clean-cluster SVG gauges, photo-based
 coils/injectors/IAC on transparent PNGs, voltage meters, status tell-tales, CKP/CMP
-oscilloscope), driven by a client-side simulator that emits `decodeFrame`-shaped frames
-so the sim→live source swap is a one-liner. Assets are background-removed + optimized by
-`tools/prep_assets.sh`.
+oscilloscope, AL-AYED logo plate), consuming live device frames only (the browser-side
+sim + free-canvas editing were removed). Coil/injector/GDI banks are 6-cylinder. Assets
+are background-removed + optimized by `tools/prep_assets.sh`.
 
-**Still open (not a scaffold gap — real work):** the acquisition path (`acq_task` +
-ADC/expander/capture drivers) is still a `TODO` stub, and the WebSocket
-telemetry/command handlers are not wired to real data yet (the dashboard currently runs
-on its own simulator; the live `EcuSocket` path is written but untested against device
-frames).
+**Live data path — DONE end-to-end (firmware sim):** `ws_broadcast()` (client
+enumeration + `httpd_ws_send_frame_async`) and both tasks are implemented. `acq_task`
+(core 1) generates the slow signals — RPM, the four analog sensors as raw mV matching
+the web transfer curves, status lines, IAC phase — into the length-1 snapshot; `net_task`
+(core 0) integrates one crank-angle accumulator from RPM to derive the latched
+coil/injector firing bits **and** the CKP 60-2 / CMP1 / CMP2 waveform edge-lists (so a
+coil flash lines up with the crank trace), then broadcasts TELEMETRY (~30 Hz) + WAVEFORM
+frames. **Verified on the device**: WS handshake `101`, ~69 TELEMETRY + ~132 WAVEFORM
+frames in 2.5 s, telemetry decodes clean (idle rpm ~810, ecu_v ~13.8 V, coils cycling in
+1-5-3-6-2-4 order), rpm breathing. This is the hardware-free simulation mode (CLAUDE.md
+§1); the sim generators are the drop-in seam for real drivers.
+
+**Still open (not a scaffold gap — real work):** the *real* acquisition drivers (ADS1115
+precision analog, MCP23017 status, 74HC165 coil/injector activity, CKP/CMP capture via
+RMT/GPTimer with 60-2 decode) that replace the sim generators field-by-field at the
+bench, and the browser→server COMMAND handler (`ws_handler` currently only accepts the
+handshake; the dashboard sends no commands since SimControls was removed).

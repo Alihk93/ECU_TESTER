@@ -19,6 +19,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -234,29 +235,123 @@ static void httpd_start_all(void)
  * ===========================================================================*/
 static void ws_broadcast(const uint8_t *frame, size_t len)
 {
-    // TODO: enumerate clients, send binary frame to each websocket fd.
-    (void)frame; (void)len;
+    if (!s_httpd) return;
+    size_t n = 8;                                  /* cfg.max_open_sockets */
+    int fds[8];
+    if (httpd_get_client_list(s_httpd, &n, fds) != ESP_OK) return;
+
+    httpd_ws_frame_t f = {
+        .type    = HTTPD_WS_TYPE_BINARY,
+        .payload = (uint8_t *)frame,
+        .len     = len,
+    };
+    for (size_t i = 0; i < n; i++) {
+        if (httpd_ws_get_fd_info(s_httpd, fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET)
+            httpd_ws_send_frame_async(s_httpd, fds[i], &f);
+    }
 }
 
 /* =============================================================================
- *  acq_task (core 1) — sample everything, publish latest snapshot.
- *  TODO: ADC1 oneshot + averaging (D4 scales), edge capture for coils/injectors
- *        with latched activity (D3), CKP/CMP into ring buffers (D5/D6).
+ *  acq_task (core 1) — SIMULATION MODE (CLAUDE.md §1: full sim with no hardware).
+ *  Generates the slow signals — RPM, the four analog sensors (as raw mV matching
+ *  the web transfer curves in theme.js), status lines and the IAC stepper phase —
+ *  and publishes them as the latest snapshot. The fast, angle-synced signals
+ *  (coil/injector firing + CKP/CMP waveform) are produced in net_task from the
+ *  same RPM, so a coil flash lines up with the crank trace on the scope.
+ *
+ *  Replace field-by-field with real driver reads at the bench: ads1115_read_mv()
+ *  for maf/map/iat/ecu_v, internal ADC1 for sensor_v, mcp23017 for status.
  * ===========================================================================*/
+static inline uint16_t clamp_u16(double v, uint16_t hi)
+{
+    if (v < 0) return 0;
+    if (v > hi) return hi;
+    return (uint16_t)(v + 0.5);
+}
+
 static void acq_task(void *arg)
 {
-    ecu_telemetry_t snap = {0};
-    const TickType_t period = pdMS_TO_TICKS(1);   /* fast inner loop */
+    const TickType_t period = pdMS_TO_TICKS(10);   /* 100 Hz analog/status */
     for (;;) {
-        snap.t_us = (uint32_t)esp_timer_get_time();
-        // TODO: fill snap.* from ADC + captured edges (or from sim generators).
+        uint32_t now = (uint32_t)esp_timer_get_time();
+        double   ts  = now / 1e6;
+
+        /* RPM: idle breathing (~0.25 Hz) + a slow rev ramp (~0.08 Hz). */
+        double lfo = sin(ts * 0.25 * 2 * M_PI);
+        double rev = 0.5 - 0.5 * cos(ts * 0.08 * 2 * M_PI);   /* 0..1 load */
+        double rpm = 820.0 + 120.0 * lfo + 2600.0 * rev * rev;
+
+        /* Analog engineering values, then back to raw mV per theme.js curves. */
+        double map_kpa = 30.0 + rev * 68.0;                   /* vacuum -> load  */
+        double maf_gs  = 4.0 + rev * 190.0 + (rpm - 820) * 0.01;
+        double iat_c   = 28.0 + 4.0 * sin(ts * 0.05 * 2 * M_PI);
+        double ecu_mv  = 13800.0 + 150.0 * sin(ts * 1.3 * 2 * M_PI);
+        double sen_mv  = 2500.0 + 1800.0 * sin(ts * 0.5 * 2 * M_PI);
+
+        ecu_telemetry_t snap = {0};
+        snap.t_us     = now;
+        snap.rpm      = clamp_u16(rpm, 8000);
+        snap.maf      = clamp_u16(maf_gs / 400.0 * 5000.0, 5000);
+        snap.map      = clamp_u16(map_kpa / 105.0 * 5000.0, 5000);
+        snap.iat      = (int16_t)clamp_u16((120.0 - iat_c) / 160.0 * 5000.0, 5000);
+        snap.ecu_v    = clamp_u16(ecu_mv, 25000);
+        snap.sensor_v = clamp_u16(sen_mv, 5000);
+        /* coils/inj_reg/inj_gdi filled by net_task (angle-synced, latched). */
+
+        uint16_t st = (1 << ST_BATTERY) | (1 << ST_SWITCH) | (1 << ST_ETC) |
+                      (1 << ST_FUEL_PUMP) | (1 << ST_MRC_P) | (1 << ST_MRC_N);
+        if (rev > 0.30) st |= (1 << ST_FAN1);                 /* temp-driven fans */
+        if (rev > 0.62) st |= (1 << ST_FAN2);
+        if (ts < 1.5)   st |= (1 << ST_START);                /* crank blip at boot */
+        snap.status = st;
+
+        snap.iac = (uint8_t)(1u << ((now / 150000u) % 4u));   /* walking A-B-C-D */
+
         xQueueOverwrite(s_state_q, &snap);        /* always-latest, no mutex */
         vTaskDelay(period);
     }
 }
 
 /* =============================================================================
- *  net_task (core 0) — build TELEMETRY/WAVEFORM frames and broadcast.
+ *  Waveform generation (SIM). A single crank-angle accumulator, integrated from
+ *  the latest RPM, feeds three edge-list channels (CKP 60-2, CMP1, CMP2) and the
+ *  coil/injector firing events — so the flashing coil matches the CKP trace.
+ * ===========================================================================*/
+#define WAVE_MAX_EDGES   256
+static const uint8_t s_fire_order[6] = { 0, 4, 2, 5, 1, 3 };  /* 1-5-3-6-2-4 */
+
+static ecu_wave_edge_t s_ckp[WAVE_MAX_EDGES], s_cmp1[32], s_cmp2[32];
+static uint8_t s_ckp_lvl, s_cmp1_lvl, s_cmp2_lvl;
+static uint8_t s_wavebuf[sizeof(ecu_frame_hdr_t) + sizeof(ecu_wave_hdr_t) +
+                         WAVE_MAX_EDGES * sizeof(ecu_wave_edge_t) + 2];
+
+/* Assemble + broadcast one WAVEFORM edge frame for a channel. */
+static void wave_broadcast(uint8_t ch, const ecu_wave_edge_t *edges, uint16_t count,
+                           uint16_t *seq)
+{
+    if (count == 0) return;
+    uint16_t payload_len = sizeof(ecu_wave_hdr_t) + count * sizeof(ecu_wave_edge_t);
+
+    ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)s_wavebuf;
+    h->magic0 = ECU_PROTO_MAGIC0;  h->magic1 = ECU_PROTO_MAGIC1;
+    h->version = ECU_PROTO_VERSION; h->msg_type = MSG_WAVEFORM;
+    h->seq = (*seq)++;              h->payload_len = payload_len;
+
+    ecu_wave_hdr_t *w = (ecu_wave_hdr_t *)(s_wavebuf + sizeof(*h));
+    w->channel = ch;  w->mode = WAVE_MODE_EDGES;
+    w->t0_us = edges[0].edge_t_us;  w->dt_us = 0;  w->count = count;
+
+    memcpy(s_wavebuf + sizeof(*h) + sizeof(*w), edges,
+           count * sizeof(ecu_wave_edge_t));
+
+    size_t body = sizeof(*h) + payload_len;
+    uint16_t crc = ecu_crc16_ccitt(s_wavebuf, body);
+    memcpy(s_wavebuf + body, &crc, sizeof(crc));
+    ws_broadcast(s_wavebuf, body + sizeof(crc));
+}
+
+/* =============================================================================
+ *  net_task (core 0) — build TELEMETRY + WAVEFORM frames and broadcast.
  * ===========================================================================*/
 static void net_task(void *arg)
 {
@@ -265,20 +360,75 @@ static void net_task(void *arg)
     uint8_t frame[sizeof(ecu_frame_hdr_t) + sizeof(ecu_telemetry_t) + 2];
     const TickType_t period = pdMS_TO_TICKS(1000 / TELEMETRY_HZ_DEFAULT);
 
+    double   crank_deg = 0;              /* absolute integrated crank angle */
+    uint32_t last_us   = (uint32_t)esp_timer_get_time();
+    long     last_fire = 0;
+
     for (;;) {
-        if (xQueuePeek(s_state_q, &snap, portMAX_DELAY) == pdTRUE) {
-            ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)frame;
-            h->magic0 = ECU_PROTO_MAGIC0;  h->magic1 = ECU_PROTO_MAGIC1;
-            h->version = ECU_PROTO_VERSION; h->msg_type = MSG_TELEMETRY;
-            h->seq = seq++;                 h->payload_len = sizeof(ecu_telemetry_t);
-            memcpy(frame + sizeof(*h), &snap, sizeof(snap));
-            size_t body = sizeof(*h) + sizeof(snap);
-            uint16_t crc = ecu_crc16_ccitt(frame, body);
-            memcpy(frame + body, &crc, sizeof(crc));   /* little-endian native */
-            ws_broadcast(frame, body + sizeof(crc));
-            // TODO: also emit WAVEFORM blocks per active SUBSCRIBE (D6).
-        }
         vTaskDelay(period);
+        if (xQueuePeek(s_state_q, &snap, portMAX_DELAY) != pdTRUE) continue;
+
+        /* --- integrate crank angle over the elapsed interval --------------- */
+        uint32_t now = (uint32_t)esp_timer_get_time();
+        double   dt_us = (double)(now - last_us);          /* wraps ~71 min: ok */
+        double   dps_us = snap.rpm * 6.0 / 1e6;            /* deg per microsec  */
+        double   a0 = crank_deg;
+        double   a1 = crank_deg + dps_us * dt_us;
+
+        uint16_t nckp = 0, ncmp1 = 0, ncmp2 = 0;
+        if (dps_us > 0) {
+            /* CKP 60-2: high in the first half of each present tooth (6°/tooth,
+               58 present then 2 missing). Emit only on level change. */
+            double b = ceil((a0 + 1e-6) / 3.0) * 3.0;      /* half-tooth grid */
+            for (; b <= a1 && nckp < WAVE_MAX_EDGES; b += 3.0) {
+                long idx = (long)floor(b / 6.0);
+                int  pos = (int)llround(b - idx * 6.0);    /* 0 or 3 */
+                int  tooth = (int)(((idx % 60) + 60) % 60);
+                uint8_t lvl = (pos == 0 && tooth < 58) ? 1 : 0;
+                if (lvl != s_ckp_lvl) {
+                    s_ckp[nckp].edge_t_us = last_us + (uint32_t)((b - a0) / dps_us);
+                    s_ckp[nckp].level = lvl;  nckp++;  s_ckp_lvl = lvl;
+                }
+            }
+            /* CMP1 high [0,360), CMP2 high [360,720) of the 720° cam cycle. */
+            double c = ceil((a0 + 1e-6) / 360.0) * 360.0;
+            for (; c <= a1 && ncmp1 < 32 && ncmp2 < 32; c += 360.0) {
+                long cyc = (long)floor(c / 360.0);
+                uint32_t t = last_us + (uint32_t)((c - a0) / dps_us);
+                uint8_t l1 = ((((cyc % 2) + 2) % 2) == 0) ? 1 : 0;
+                uint8_t l2 = l1 ? 0 : 1;
+                if (l1 != s_cmp1_lvl) { s_cmp1[ncmp1].edge_t_us = t; s_cmp1[ncmp1].level = l1; ncmp1++; s_cmp1_lvl = l1; }
+                if (l2 != s_cmp2_lvl) { s_cmp2[ncmp2].edge_t_us = t; s_cmp2[ncmp2].level = l2; ncmp2++; s_cmp2_lvl = l2; }
+            }
+            /* Firing events: one cylinder every 120° crank, in firing order.
+               Latched into the telemetry bits "since last frame". */
+            long f1 = (long)floor(a1 / 120.0);
+            for (long e = last_fire + 1; e <= f1; e++) {
+                uint8_t cyl = s_fire_order[((e % 6) + 6) % 6];
+                snap.coils   |= (1u << cyl);
+                snap.inj_reg |= (1u << cyl);
+                snap.inj_gdi |= (1u << cyl);
+            }
+            last_fire = f1;
+        }
+        crank_deg = a1;
+        last_us   = now;
+
+        /* --- TELEMETRY ---------------------------------------------------- */
+        ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)frame;
+        h->magic0 = ECU_PROTO_MAGIC0;  h->magic1 = ECU_PROTO_MAGIC1;
+        h->version = ECU_PROTO_VERSION; h->msg_type = MSG_TELEMETRY;
+        h->seq = seq++;                 h->payload_len = sizeof(ecu_telemetry_t);
+        memcpy(frame + sizeof(*h), &snap, sizeof(snap));
+        size_t body = sizeof(*h) + sizeof(snap);
+        uint16_t crc = ecu_crc16_ccitt(frame, body);
+        memcpy(frame + body, &crc, sizeof(crc));   /* little-endian native */
+        ws_broadcast(frame, body + sizeof(crc));
+
+        /* --- WAVEFORM (CKP / CMP1 / CMP2) --------------------------------- */
+        wave_broadcast(WAVE_CH_CKP,  s_ckp,  nckp,  &seq);
+        wave_broadcast(WAVE_CH_CMP1, s_cmp1, ncmp1, &seq);
+        wave_broadcast(WAVE_CH_CMP2, s_cmp2, ncmp2, &seq);
     }
 }
 
