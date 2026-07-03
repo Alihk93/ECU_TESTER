@@ -223,6 +223,13 @@ managed component (`joltwallet/littlefs`, resolved 1.22.1) is wired via
 the `hardware/README.md` GPIO map (Sensor-V ADC1 GPIO4; CKP/CMP1/CMP2 = 5/6/7; I²C
 SDA 47 / SCL 21 for ADS1115+MCP23017; 74HC165 QH/CLK/LD = 16/17/18).
 
-**Still open (not a scaffold gap — real work):** `main.c` acquisition + web/WebSocket
-handlers are stubs (`TODO`s) and the web dashboard is a skeleton. Nothing bench-tested
-on hardware yet.
+**Bench (first hardware bring-up):** the SoftAP path is implemented and
+**verified on the device** — `wifi_softap_start()` brings up `esp_netif` + the default
+event loop + Wi-Fi AP (`ECU_TESTER` / WPA2) at `10.10.10.10`, and the board boots
+cleanly and stays up. (Earlier the stub skipped `esp_netif_init()`, so `httpd_start()`
+hit lwIP with no TCP/IP task and the chip reboot-looped on an "Invalid mbox" assert.)
+
+**Still open (not a scaffold gap — real work):** the acquisition path (`acq_task` +
+ADC/expander/capture drivers) and asset serving (`littlefs_mount` + `static_get_handler`)
+are still `TODO` stubs, and the web dashboard is a work in progress. The WebSocket
+telemetry/command handlers are not wired to real data yet.

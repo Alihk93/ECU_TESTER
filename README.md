@@ -74,12 +74,13 @@ Then join Wi-Fi `ECU_TESTER` (password `00000000`) and open **http://10.10.10.10
 
 ## Status
 
-🟢 **Skeleton builds clean.** Structure, docs, and the firmware↔web protocol contract
-are in place, and the ESP-IDF v5.5.2 firmware **compiles for `esp32s3`** (`idf.py build`
-green; app ≈ 0x56e10 bytes, ~89% of the app partition free). The acquisition and
-web/WebSocket handlers are still stubs (`TODO`s in `main.c`), and the dashboard and PCB
-are skeletons — all design decisions D0–D8 are resolved (see
-[`OPEN_DECISIONS.md`](OPEN_DECISIONS.md)). Not yet bench-tested on hardware.
+🟢 **Boots on hardware; SoftAP up.** Structure, docs, and the firmware↔web protocol
+contract are in place; the ESP-IDF v5.5.2 firmware builds for `esp32s3` (app ≈ 0xc3e50
+bytes, ~74% of the app partition free) and, **verified on the device**, boots cleanly and
+serves its Wi-Fi AP (`ECU_TESTER`, WPA2) at **10.10.10.10**. The acquisition path and
+asset serving are still stubs (`TODO`s in `main.c`), and the dashboard and PCB are
+work-in-progress — all design decisions D0–D8 are resolved (see
+[`OPEN_DECISIONS.md`](OPEN_DECISIONS.md)).
 
 ## License
 

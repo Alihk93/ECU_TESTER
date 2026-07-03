@@ -23,6 +23,9 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "esp_http_server.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 
 #include "board_config.h"
 #include "protocol.h"
@@ -34,15 +37,49 @@ static QueueHandle_t s_state_q;      /* length-1, xQueueOverwrite / xQueuePeek *
 static httpd_handle_t s_httpd;
 
 /* =============================================================================
- *  Wi-Fi SoftAP  — TODO: bring up SoftAP and set the AP netif IP to 10.10.10.10
- *  (default is 192.168.4.1). Resolve D1 for auth (open vs >=8-char WPA2 key).
+ *  Wi-Fi SoftAP (D1: SSID ECU_TESTER / WPA2 00000000 / IP 10.10.10.10).
+ *  Also brings up esp_netif + the default event loop — this starts the lwIP
+ *  TCP/IP task, which MUST exist before httpd_start() touches a socket
+ *  (otherwise lwIP asserts "Invalid mbox" and the chip reboot-loops).
  * ===========================================================================*/
 static void wifi_softap_start(void)
 {
-    // TODO: esp_netif_create_default_wifi_ap(); stop DHCP server; set IP info
-    //       (AP_IP_ADDR/AP_GW_ADDR/AP_NETMASK); restart DHCP; esp_wifi_init();
-    //       wifi_config_t with AP_SSID/AP_PASSWORD/AP_CHANNEL/AP_MAX_CONN; start.
-    ESP_LOGW(TAG, "wifi_softap_start: TODO (SSID '%s', IP %s)", AP_SSID, AP_IP_ADDR);
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
+
+    /* Non-default AP IP: stop DHCP, set 10.10.10.10, restart DHCP. */
+    esp_netif_ip_info_t ip = {0};
+    esp_netif_str_to_ip4(AP_IP_ADDR,  &ip.ip);
+    esp_netif_str_to_ip4(AP_GW_ADDR,  &ip.gw);
+    esp_netif_str_to_ip4(AP_NETMASK,  &ip.netmask);
+    ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif));
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip));
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
+
+    wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&init_cfg));
+
+    wifi_config_t wc = {
+        .ap = {
+            .ssid           = AP_SSID,
+            .ssid_len       = strlen(AP_SSID),
+            .channel        = AP_CHANNEL,
+            .password       = AP_PASSWORD,
+            .max_connection = AP_MAX_CONN,
+            .authmode       = WIFI_AUTH_WPA2_PSK,   /* WPA2-PSK: password must be >= 8 chars */
+        },
+    };
+    if (strlen(AP_PASSWORD) == 0) {
+        wc.ap.authmode = WIFI_AUTH_OPEN;            /* fall back to open if key is empty */
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wc));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "SoftAP '%s' up (auth %s), IP %s",
+             AP_SSID, strlen(AP_PASSWORD) ? "WPA2-PSK" : "OPEN", AP_IP_ADDR);
 }
 
 /* =============================================================================
