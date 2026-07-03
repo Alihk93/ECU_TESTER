@@ -146,7 +146,7 @@ ECU_TESTER/
 │           ├── idf_component.yml   managed deps (joltwallet/littlefs)
 │           ├── main.c         dual-core task skeleton (TODOs, no committed pinmap)
 │           └── include/
-│               ├── board_config.h   GPIO-budget notes + AP creds; pinmap still TODO
+│               ├── board_config.h   committed pinmap + AP creds (mirrors hardware/README.md)
 │               └── protocol.h       packed structs + CRC — firmware side of the contract
 ├── web/                   local dashboard (served from LittleFS)
 │   ├── index.html         landscape/fullscreen shell
@@ -219,9 +219,10 @@ Scaffold created; **all decisions D0–D8 resolved (2026-07-02)**. Front-end spe
 build` green; app ≈ 0x56e10 bytes, ~89% of the app partition free). The LittleFS
 managed component (`joltwallet/littlefs`, resolved 1.22.1) is wired via
 `main/idf_component.yml`. `board_config.h` now carries the resolved D1 AP credentials
-(`ECU_TESTER` / `00000000`).
+(`ECU_TESTER` / `00000000`) **and the committed GPIO pinmap** — the firmware mirror of
+the `hardware/README.md` GPIO map (Sensor-V ADC1 GPIO4; CKP/CMP1/CMP2 = 5/6/7; I²C
+SDA 47 / SCL 21 for ADS1115+MCP23017; 74HC165 QH/CLK/LD = 16/17/18).
 
 **Still open (not a scaffold gap — real work):** `main.c` acquisition + web/WebSocket
-handlers are stubs (`TODO`s), the concrete GPIO **pinmap is not yet committed** in
-`board_config.h` (channels still commented out), and the web dashboard is a skeleton.
-Nothing bench-tested on hardware yet.
+handlers are stubs (`TODO`s) and the web dashboard is a skeleton. Nothing bench-tested
+on hardware yet.

@@ -103,9 +103,10 @@ D3 = timing. Fast edge capture can't go through a slow I2C expander.
 revisit if D3 requires per-channel timing (then a capture front-end).
 **Status:** 🟢 RESOLVED — **MCP23017** (slow status) + **74HC165** chain (coil/injector
 activity) + **ADS1115** (precision analog). No capture front-end MCU (D3 = activity-only).
-The expansion *strategy* is locked; the concrete GPIO **pinmap is still TODO** in
-`firmware/ECU_Tester/main/include/board_config.h` (channels commented out pending a bench
-pin-assignment pass).
+Concrete GPIO **pinmap committed** in `firmware/ECU_Tester/main/include/board_config.h`,
+mirroring the "GPIO map" in `hardware/README.md`: I²C SDA 47 / SCL 21 · Sensor-V ADC1
+GPIO4 · CKP/CMP1/CMP2 = 5/6/7 · 74HC165 QH/CLK/LD = 16/17/18 (26–37 reserved for octal
+flash/PSRAM; 0/3/45/46 strapping; 19/20 USB; 43/44 UART0).
 
 ## D8 — Client display + kiosk auto-launch  🟡
 **Context:** spec mentions "Internet Explorer", "smart TV", "PC desktop", and "boot

@@ -74,7 +74,7 @@ CMP = Hall.
   sensors if powered) and 3.3 V (ESP32-S3, logic). Reverse-battery + load-dump
   protection on the 12 V inlet.
 
-## GPIO map (mirrors `firmware/main/include/board_config.h`)
+## GPIO map (mirrors `firmware/ECU_Tester/main/include/board_config.h`)
 I²C SDA 47 / SCL 21 · Sensor-V ADC1 GPIO4 · 74HC165 QH 16 / CLK 17 / LD 18 ·
 CKP 5 · CMP1 6 · CMP2 7 · status LED 48.
 Reserved: 26–37 (octal flash/PSRAM), 0/3/45/46 (strapping), 19/20 (USB), 43/44 (UART0).
