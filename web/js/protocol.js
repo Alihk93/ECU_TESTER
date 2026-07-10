@@ -114,6 +114,9 @@ function decodeTelemetry(dv, o) {
 }
 
 // docs/PROTOCOL.md §4
+// Edge lists decode into parallel typed arrays (tUs/level), not per-edge
+// objects: at thousands of edges/s the object garbage caused periodic GC
+// pauses on TV/tablet browsers. Wire layout is unchanged.
 function decodeWaveform(dv, bytes, o) {
   const channel = dv.getUint8(o + 0);
   const mode = dv.getUint8(o + 1);
@@ -126,11 +129,13 @@ function decodeWaveform(dv, bytes, o) {
     for (let i = 0; i < count; i++, d += 2) samples[i] = dv.getInt16(d, true);
     return { channel, mode, t0Us, dtUs, samples };
   } else {
-    const edges = new Array(count);
+    const tUs = new Uint32Array(count);
+    const level = new Uint8Array(count);
     for (let i = 0; i < count; i++, d += 5) {
-      edges[i] = { tUs: dv.getUint32(d, true), level: dv.getUint8(d + 4) };
+      tUs[i] = dv.getUint32(d, true);
+      level[i] = dv.getUint8(d + 4);
     }
-    return { channel, mode, t0Us, edges };
+    return { channel, mode, t0Us, count, tUs, level };
   }
 }
 

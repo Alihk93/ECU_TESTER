@@ -4,8 +4,8 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "web"],
-      "port": 8080
+      "runtimeArgs": ["tools/sim_server.py", "--port", "8090"],
+      "port": 8090
     }
   ]
 }

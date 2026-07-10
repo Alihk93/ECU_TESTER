@@ -231,16 +231,36 @@ hit lwIP with no TCP/IP task and the chip reboot-looped on an "Invalid mbox" ass
 `littlefs_mount()` + `static_get_handler()` now serve the dashboard: a LittleFS image
 is built from `web/` at compile time (`littlefs_create_partition_image(... FLASH_IN_PROJECT)`
 in `main/CMakeLists.txt`) and flashed with the app; the handler streams files chunked
-with per-type MIME + `Cache-Control` (long for assets, `no-cache` for HTML) behind a
+with per-type MIME + `Cache-Control` (long for media, `no-cache` for HTML/JS/CSS so a
+reflashed UI shows immediately — a kiosk browser otherwise runs year-stale JS) behind a
 `/*` wildcard route, with the exact `/ws` route registered first. Boot log confirms
-`LittleFS mounted at /web — ~1.19 MB used` and `web root OK: index.html`.
+`LittleFS mounted at /web` and `web root OK: index.html`.
 
-**Web dashboard:** the real-time cobalt dashboard is **built and served from the
-device** — 11 fixed-layout modules (clean-cluster SVG gauges, photo-based
-coils/injectors/IAC on transparent PNGs, voltage meters, status tell-tales, CKP/CMP
-oscilloscope, AL-AYED logo plate), consuming live device frames only (the browser-side
-sim + free-canvas editing were removed). Coil/injector/GDI banks are 6-cylinder. Assets
-are background-removed + optimized by `tools/prep_assets.sh`.
+**Web dashboard:** the AL-AYED layout (from Claude Design 2026-07-09) in the **flat
+marine skin** (client decision 2026-07-10 after the bench TV measured 8 FPS on the
+decorated version) is **served from the device** — 1920×1080 fixed canvas fitted to the
+viewport (Blink `zoom`, fallback transform): top bar (DEVICE/UPTIME/white logo
+`logo_w.png`/VOLTAGE/CURRENT 7-seg readouts, no ghost digits), status grid
+(FAN1/FAN2/IMO/HIP/IAC), CKP-CMP canvas oscilloscope + decorative CAN, relay indicator
+row, big RPM dial, six 0–5 V mini gauges (CTS/MAF/MAP/IAT/5V/IGF), and 8-cell
+COIL/INJ/GDI banks with spark/spray bursts. One unified "white navy" background
+(`--navy` #33516f), flat colors + 1px borders only — **no gradients, shadows, glows or
+filters anywhere** (do not reintroduce). `app.js` is the view (global `ECU` API);
+`js/live.js` maps decoded protocol frames onto it (coalesced to ~12.5 Hz, latched bits
+OR-ed, stale-stream watchdog forces reconnect). The page free-runs as a demo until the
+first valid frame, then `.is-live` gates every animation behind real telemetry and the
+scope draws real edge-lists on a single `<canvas>` at 20 Hz. `js/diag.js` shows an
+FPS/WS/age corner meter (tap or key D hides). CTS/IGF/CURRENT have **no protocol v1
+field** — zeroed in live mode; HIP+PFC-OFF both show the Fuel Pump bit; banks show 8
+channels (6-cyl sim fires 1–6). Signal map in `web/README.md`. `tools/sim_server.py`
+(stdlib Python) serves `web/` + speaks the full binary protocol with the same generators
+as the firmware sim — dashboard development needs no hardware:
+`python3 tools/sim_server.py` → `:8090`.
+**TV/kiosk perf rules are load-bearing** (the display browsers render single-threaded
+in software): no per-frame `:root` CSS-var writes, stepped `steps()` animation timing,
+animated sprites on cached layers (`will-change` + `contain: paint`), data-driven canvas
+scope (never mutated SVG), needles rotate as element transforms, no `aspect-ratio`/
+`min()`, code served `no-cache` / media long-cached — rules + reasons in `web/README.md`.
 
 **Live data path — DONE end-to-end (firmware sim):** `ws_broadcast()` (client
 enumeration + `httpd_ws_send_frame_async`) and both tasks are implemented. `acq_task`
@@ -253,6 +273,13 @@ frames. **Verified on the device**: WS handshake `101`, ~69 TELEMETRY + ~132 WAV
 frames in 2.5 s, telemetry decodes clean (idle rpm ~810, ecu_v ~13.8 V, coils cycling in
 1-5-3-6-2-4 order), rpm breathing. This is the hardware-free simulation mode (CLAUDE.md
 §1); the sim generators are the drop-in seam for real drivers.
+**Broadcast back-pressure is load-bearing:** clients doze in Wi-Fi power save (TVs,
+tablets), so `ws_broadcast` sends only when the socket is writable (zero-timeout
+`select`), drops the frame for that client otherwise, and evicts after ~2 s of
+continuous back-pressure; WS sockets get `SO_SNDTIMEO` 100 ms + `TCP_NODELAY` at
+handshake. Never let one client's send block `net_task` — it froze every viewer.
+Browser-side, `live.js` coalesces bursts (latest frame wins, firing bits OR-latched)
+and applies to the DOM at ~12.5 Hz.
 
 **Still open (not a scaffold gap — real work):** the *real* acquisition drivers (ADS1115
 precision analog, MCP23017 status, 74HC165 coil/injector activity, CKP/CMP capture via

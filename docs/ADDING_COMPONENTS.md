@@ -12,14 +12,17 @@ Two independent axes: a **data field** (firmware + protocol) and a **UI componen
 **All in one commit** — the three must never drift (CLAUDE.md "contract invariant").
 
 ## Add a new UI component
-The spec's `.qml` names map to web components (QML doesn't run on the ESP32-S3):
-`Gauge`, `VoltageMeter`, `Indicator`, `WaveformView`, `InjectorAnimation`, `CoilIndicator`.
-1. Create `web/js/components/<Name>.js` exporting a component that takes `(mountEl, opts)`
-   and exposes an `update(data)` method.
-2. Mount it into its panel in `web/index.html` from `app.js`.
-3. Feed it from the `onFrame` dispatcher in `app.js`.
-Layout stays in CSS grid, so adding a gauge/indicator does not require redesigning the UI
-(a spec requirement).
+The dashboard is a fixed 1920×1080 page: static markup in `web/index.html`,
+`web/app.js` as the view layer (builds the dynamic DOM, exposes the global `ECU`
+display API), and `web/js/live.js` as the only bridge from protocol frames to that API.
+1. Add the element's markup in `index.html` (or a build function in `app.js` if it is
+   repeated, like the banks/gauges), styled flat per the marine skin.
+2. Add a setter on the `ECU` object in `app.js` that updates the cached element —
+   skip the DOM write when the displayed value is unchanged.
+3. Call the setter from `applyTelemetry()` in `web/js/live.js`.
+Respect the TV/kiosk performance rules in `web/README.md` (flat colors only, stepped
+animation timing, no per-frame `:root` writes, canvas — not SVG — for anything that
+redraws continuously).
 
 ## Add a new manual control
 Add a `cmd_id` to `docs/PROTOCOL.md` §5, handle it in the firmware WS handler, and emit it

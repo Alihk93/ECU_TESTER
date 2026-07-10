@@ -1,25 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>ECU_TESTER</title>
-  <link rel="stylesheet" href="css/style.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECU TESTER — AL-AYED</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Landscape kiosk dashboard (OPEN_DECISIONS D8). Free-canvas: modules live on a
-       fixed design-space #stage that scales to FHD/4K. Real-time device data only. -->
-  <header class="topbar">
-    <img class="brand-logo" src="assets/img/logo.png" alt="ECU TESTER · AL-AYED" />
-    <div class="tb-actions">
-      <span id="conn" class="conn conn--connecting">connecting…</span>
+
+<div class="stage" id="stage">
+  <!-- Shared SVG gradient defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="mgNeedle" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2b578"></stop>
+      <stop offset="0.6" stop-color="#c07a38"></stop>
+      <stop offset="1" stop-color="#8a4f1e"></stop>
+    </linearGradient>
+  </defs></svg>
+
+  <div class="frame">
+
+    <!-- ================= TOP BAR ================= -->
+    <div class="topbar">
+      <!-- DEVICE STATUS -->
+      <div class="readout readout--device" id="device-panel">
+        <span class="readout-label">DEVICE:</span>
+        <div class="status-led"></div>
+        <span class="status-text" id="device-status">CONNECTED</span>
+      </div>
+
+      <!-- UPTIME -->
+      <div class="readout">
+        <span class="readout-label">UPTIME:</span>
+        <div class="seg seg--uptime">
+          <span class="seg-value" id="uptime">00:00:00</span>
+        </div>
+      </div>
+
+      <!-- CENTER LOGO -->
+      <div class="logo-wrap">
+        <img src="assets/img/logo_w.png" alt="ECU TESTER — AL-AYED">
+      </div>
+
+      <!-- VOLTAGE -->
+      <div class="readout">
+        <span class="readout-label">VOLTAGE:</span>
+        <div class="seg seg--voltage">
+          <span class="seg-value" id="voltage">30.00</span>
+        </div>
+        <span class="readout-unit">V</span>
+      </div>
+
+      <!-- CURRENT -->
+      <div class="readout">
+        <span class="readout-label">CURRENT</span>
+        <div class="seg seg--current">
+          <span class="seg-value" id="current">0.12</span>
+        </div>
+        <span class="readout-unit">A</span>
+      </div>
     </div>
-  </header>
 
-  <div id="stage-wrap">
-    <main id="stage" class="stage"><!-- modules injected by layout.js --></main>
+    <!-- ================= MIDDLE ROW ================= -->
+    <div class="mid">
+
+      <!-- LEFT COLUMN -->
+      <div class="left-col">
+
+        <!-- STATUS BUTTON GRID -->
+        <div class="status-grid">
+          <div class="status-cell status-cell--fan" data-cell="fan1">
+            <div class="num-badge">1</div>
+            <img src="assets/img/fan.png" alt="FAN 1">
+          </div>
+          <div class="status-cell status-cell--fan status-cell--fan2" data-cell="fan2">
+            <div class="num-badge">2</div>
+            <img src="assets/img/fan.png" alt="FAN 2">
+          </div>
+          <div class="status-cell status-cell--red" data-cell="imo">
+            <img src="assets/img/immo.png" alt="IMO immobilizer">
+          </div>
+          <div class="status-cell status-cell--red" data-cell="hip">
+            <img src="assets/img/hip.png" alt="HIP high-pressure pump">
+          </div>
+          <div class="status-cell status-cell--iac" id="iac-cell">
+            <img src="assets/img/iac.png" alt="IAC valve">
+            <div class="iac-leds">
+              <div class="iac-led"></div>
+              <div class="iac-led"></div>
+              <div class="iac-led"></div>
+              <div class="iac-led"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OSCILLOSCOPE PANEL -->
+        <div class="scope">
+          <!-- CKP / CMP plot: one canvas for all three lanes. SVG path mutation
+               is the priciest repeated paint on single-threaded TV renderers;
+               canvas strokes the same square waves for a fraction of the cost. -->
+          <div class="scope-plot scope-plot--ckp">
+            <div class="scope-cursor"></div>
+            <div class="scope-lanes">
+              <span class="trace-label">CKP</span>
+              <span class="trace-label">CMP1</span>
+              <span class="trace-label">CMP2</span>
+            </div>
+            <canvas id="scope-canvas"></canvas>
+          </div>
+          <!-- CAN header -->
+          <div class="scope-header">
+            <span class="scope-header-title">CAN BUS</span>
+            <span class="scope-header-spacer"></span>
+            <span class="scope-header-dot"></span>
+            <span class="scope-header-dot"></span>
+          </div>
+          <!-- CAN plot (decorative — no CAN channel in protocol v1). The scroll
+               animates the <svg> element itself so it stays GPU-composited;
+               transforms inside an SVG repaint per frame on TV browsers. -->
+          <div class="scope-plot scope-plot--can">
+            <div class="scope-cursor"></div>
+            <div class="trace-row">
+              <span class="trace-label">CAN HI</span>
+              <div class="trace-clip">
+                <div class="can-scroll can-scroll--hi" style="animation-duration: var(--canh-dur)"></div>
+              </div>
+            </div>
+            <div class="trace-row">
+              <span class="trace-label">CAN LO</span>
+              <div class="trace-clip">
+                <div class="can-scroll can-scroll--lo" style="animation-duration: var(--canl-dur)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN : SENSOR GAUGES & RPM -->
+      <div class="gauges-panel">
+        <div class="gauges-row">
+          <!-- left sub: indicators + RPM -->
+          <div class="gauges-left">
+            <div class="indicators" id="indicators"></div>
+
+            <div class="rpm-wrap">
+              <div class="rpm-bezel">
+                <div class="rpm-face">
+                  <svg viewBox="0 0 400 400">
+                    <g id="rpm-ticks"></g>
+                    <path id="rpm-redline" class="rpm-redline" fill="none" stroke="#ff4a1e" stroke-width="6" stroke-linecap="round"></path>
+                    <g fill="#cdd6e0" font-family="Saira" font-size="26" font-weight="700" text-anchor="middle" dominant-baseline="central">
+                      <text x="103.8" y="296.2">0</text>
+                      <text x="66.6" y="226.5">1</text>
+                      <text x="74.4" y="148.0">2</text>
+                      <text x="124.4" y="86.9">3</text>
+                      <text x="200" y="64">4</text>
+                      <text x="275.6" y="86.9">5</text>
+                      <text x="325.6" y="148.0">6</text>
+                      <text x="333.4" y="226.5">7</text>
+                      <text x="296.2" y="296.2">8</text>
+                    </g>
+                  </svg>
+                  <!-- needle in its own svg: rotating the element (not a group
+                       inside the dial svg) stays on the compositor -->
+                  <svg id="rpm-needle" viewBox="0 0 400 400">
+                    <g class="rpm-needle-wobble">
+                      <polygon points="200,58 206,200 194,200" fill="#ff5a1e"></polygon>
+                      <line x1="200" y1="200" x2="200" y2="252" stroke="#ff5a1e" stroke-width="6" stroke-linecap="round"></line>
+                    </g>
+                  </svg>
+                  <svg viewBox="0 0 400 400" aria-hidden="true">
+                    <circle cx="200" cy="200" r="16" fill="#15181c" stroke="#ff5a1e" stroke-width="2.5"></circle>
+                    <circle cx="200" cy="200" r="6" fill="#ff5a1e"></circle>
+                  </svg>
+                  <div class="rpm-center">
+                    <div class="rpm-title">RPM</div>
+                    <div class="rpm-x1000">×1000</div>
+                    <div class="rpm-reading" id="rpm-reading">5,000</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- right sub: mini gauges -->
+          <div class="mini-gauges" id="mini-gauges"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= OUTPUT DRIVER BANKS ================= -->
+    <div class="banks">
+      <div class="bank bank--coil">
+        <div class="bank-grid" id="bank-coil"></div>
+      </div>
+      <div class="bank bank--inj">
+        <div class="bank-grid" id="bank-inj"></div>
+      </div>
+      <div class="bank bank--gdi">
+        <div class="bank-grid" id="bank-gdi"></div>
+      </div>
+    </div>
+
   </div>
+</div>
 
-  <script type="module" src="js/app.js"></script>
+<script src="app.js"></script>
+<script type="module" src="js/live.js"></script>
+<script src="js/diag.js"></script>
 </body>
 </html>

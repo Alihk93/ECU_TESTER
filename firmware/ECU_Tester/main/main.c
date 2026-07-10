@@ -31,6 +31,7 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_littlefs.h"
+#include "lwip/sockets.h"
 
 #include "board_config.h"
 #include "protocol.h"
@@ -131,7 +132,16 @@ static void littlefs_mount(void)
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {          /* WS handshake */
-        ESP_LOGI(TAG, "WS client connected fd=%d", httpd_req_to_sockfd(req));
+        int fd = httpd_req_to_sockfd(req);
+        /* Telemetry sockets must never stall the bench: cap a blocking send at
+         * 100 ms (default is 5 s — one dozing TV froze the stream for every
+         * client), and disable Nagle so 30 Hz frames leave on time instead of
+         * coalescing into bursts. */
+        struct timeval tmo = { .tv_sec = 0, .tv_usec = 100 * 1000 };
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmo, sizeof(tmo));
+        int nodelay = 1;
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+        ESP_LOGI(TAG, "WS client connected fd=%d", fd);
         return ESP_OK;
     }
     // TODO: httpd_ws_recv_frame() -> verify magic/version/CRC (protocol.h)
@@ -190,11 +200,15 @@ static esp_err_t static_get_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
+    /* Code (HTML/JS/CSS/JSON) revalidates so a reflashed UI shows immediately;
+     * media (images/fonts) keeps the long lifetime. Without this, a kiosk
+     * browser runs year-stale JS after a web-partition update. */
     const char *ext = strrchr(path, '.');
-    int is_html = (ext && !strcasecmp(ext, ".html"));
+    int is_code = ext && (!strcasecmp(ext, ".html") || !strcasecmp(ext, ".js") ||
+                          !strcasecmp(ext, ".css")  || !strcasecmp(ext, ".json"));
     httpd_resp_set_type(req, mime_for(path));
     httpd_resp_set_hdr(req, "Cache-Control",
-                       is_html ? "no-cache" : "public, max-age=31536000");
+                       is_code ? "no-cache" : "public, max-age=31536000");
 
     char *buf = malloc(WEB_CHUNK);
     if (!buf) { fclose(f); httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, NULL); return ESP_FAIL; }
@@ -231,10 +245,21 @@ static void httpd_start_all(void)
 /* =============================================================================
  *  Broadcast one already-built binary frame to every connected WS client.
  *  (Pattern from S-ECU: httpd_get_client_list + httpd_ws_get_fd_info filter +
- *   httpd_queue_work -> httpd_ws_send_frame_async.)
+ *   httpd_ws_send_frame_async.)
+ *
+ *  A client in Wi-Fi power save (TVs and tablets doze constantly) stops ACKing
+ *  and its TCP send buffer fills; a blocking send would then stall this task —
+ *  and therefore every other client's stream. So: send only when the socket is
+ *  writable (zero-timeout select), otherwise drop the frame for that client
+ *  (telemetry is latest-state; a dropped frame is invisible). ~2 s of
+ *  continuous back-pressure or a send error evicts the client — the browser
+ *  auto-reconnects (websocket.js).
  * ===========================================================================*/
+#define WS_EVICT_STRIKES 240   /* consecutive undeliverable frames ≈ 2 s */
+
 static void ws_broadcast(const uint8_t *frame, size_t len)
 {
+    static uint8_t strikes[FD_SETSIZE];
     if (!s_httpd) return;
     size_t n = 8;                                  /* cfg.max_open_sockets */
     int fds[8];
@@ -246,8 +271,24 @@ static void ws_broadcast(const uint8_t *frame, size_t len)
         .len     = len,
     };
     for (size_t i = 0; i < n; i++) {
-        if (httpd_ws_get_fd_info(s_httpd, fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET)
-            httpd_ws_send_frame_async(s_httpd, fds[i], &f);
+        int fd = fds[i];
+        if (fd < 0 || fd >= FD_SETSIZE) continue;
+        if (httpd_ws_get_fd_info(s_httpd, fd) != HTTPD_WS_CLIENT_WEBSOCKET) continue;
+
+        fd_set wset;
+        FD_ZERO(&wset);
+        FD_SET(fd, &wset);
+        struct timeval poll0 = { 0, 0 };
+        bool ok = select(fd + 1, NULL, &wset, NULL, &poll0) > 0 &&
+                  FD_ISSET(fd, &wset) &&
+                  httpd_ws_send_frame_async(s_httpd, fd, &f) == ESP_OK;
+        if (ok) {
+            strikes[fd] = 0;
+        } else if (++strikes[fd] >= WS_EVICT_STRIKES) {
+            ESP_LOGW(TAG, "WS fd=%d stalled >2s, evicting", fd);
+            strikes[fd] = 0;
+            httpd_sess_trigger_close(s_httpd, fd);
+        }
     }
 }
 

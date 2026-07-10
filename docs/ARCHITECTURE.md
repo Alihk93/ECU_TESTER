@@ -82,9 +82,11 @@ uses a **LittleFS partition** instead.
 
 **Why LittleFS here:** the dashboard is large and may include a real photo (per the spec's
 "Local Web page" section). Browser caching + independent UI updates matter at this size.
-Serve static assets with `Cache-Control: public, max-age=31536000` so heavy files load once
-and every later interaction is pure WebSocket traffic. Set flash to **QIO @ 80 MHz** for
-read speed (`sdkconfig.defaults`).
+Serve **media** (images/fonts) with `Cache-Control: public, max-age=31536000` so heavy files
+load once and every later interaction is pure WebSocket traffic; serve **code**
+(HTML/JS/CSS/JSON) with `no-cache` so a reflashed UI shows immediately — a kiosk browser
+otherwise keeps running year-stale JS after a web-partition update. Set flash to
+**QIO @ 80 MHz** for read speed (`sdkconfig.defaults`).
 
 ## 5. Web/UI architecture
 
