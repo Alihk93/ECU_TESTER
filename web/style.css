@@ -266,9 +266,9 @@ html, body {
   width: 180px;
   transform-origin: 50% 50%;
   will-change: transform;
-  animation: fan-spin var(--fan-dur-a) steps(24, end) infinite;
+  animation: fan-spin var(--fan-dur-a) steps(16, end) infinite;
 }
-.status-cell--fan2 img { animation: fan-spin var(--fan-dur-b) steps(24, end) infinite reverse; }
+.status-cell--fan2 img { animation: fan-spin var(--fan-dur-b) steps(16, end) infinite reverse; }
 
 .status-cell--red {
   color: #ff5b50;
@@ -413,7 +413,7 @@ html, body {
   background-repeat: repeat-x;
   background-size: 50% 100%;
   will-change: transform;
-  animation: can-scroll 1.5s steps(48, end) infinite;
+  animation: can-scroll 1.5s steps(16, end) infinite;
 }
 @keyframes can-scroll {
   from { transform: translateX(0); }

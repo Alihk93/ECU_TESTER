@@ -24,8 +24,9 @@ assets/img|fonts  — component photos, Saira + DSEG7 fonts
 
 `js/diag.js` shows a corner meter — **FPS** (real redraw rate) · **WS/s**
 (protocol frames received, ~90 healthy) · **age** (ms since last telemetry;
-climbing = stream stalled, not the renderer). Tap it or press **D** to
-hide/show. There are no render modes — the flat skin is the only design.
+climbing = stream stalled, not the renderer) · **res** (viewport × dpr, e.g.
+`1920×1080@1`). Tap it or press **D** to hide/show; it's on by default, so add
+`?diag=0` to disable it for a production kiosk. The flat skin is the only design.
 
 ## Demo vs live
 
@@ -75,16 +76,16 @@ keep them or the dashboard visibly janks:
   costs per-frame filtering (spark/GDI brightness is baked into the PNGs).
 - **The scope is a single `<canvas>`, never mutated SVG paths** — SVG path
   rewriting is the priciest repeated paint on these renderers. It strokes at
-  ~25 fps with a wall-clock-advanced window (smooth scroll, no per-batch
-  jumps) and a slow fallback tick for when the TV suspends rAF.
+  ~15 fps on a setTimeout tick (not a 60 Hz rAF) with a wall-clock-advanced
+  window (smooth scroll, no per-batch jumps) and a slow fallback for rAF stalls.
 - **Needles rotate as element transforms** (`#rpm-needle`, `.mg-needle-rot`
   overlay SVGs) — compositor-only; rotating a group *inside* an SVG repaints
   the whole dial per frame.
 - **No blanket `will-change`** — two dozen permanently promoted layers exhaust
   TV GPU memory; elements self-promote while actually animating.
-- **Continuous animations use `steps()` timing** (fans 24/rev, sparks + sprays
-  step-end opacity pops, CAN 48/cycle) — a smooth 60 Hz animation damages the
-  screen every frame on a software renderer; stepped reads the same, costs ~⅓.
+- **Continuous animations use `steps()` timing** (fans 16/rev, sparks + sprays
+  step-end opacity pops, CAN 16/cycle) — a smooth 60 Hz animation damages the
+  screen every frame on a software renderer; stepped reads the same, costs far less.
 - **Animated sprites own cached layers** (`will-change: opacity` on spark/spray,
   `contain: paint` on bank cells): the static page rasterizes once; per frame
   only the few animated bitmaps get composited.
@@ -97,9 +98,9 @@ keep them or the dashboard visibly janks:
   the RPM bezel is a fixed 384×384 px in the 1920×1080 canvas.
 - **Stage fitting**: a `transform: scale()` on the stage makes a software
   compositor resample the whole screen every frame (measured 5–7 FPS on a TV).
-  `fitStage()` snaps to identity within 2% of 1080p; `?fit=zoom` scales by
-  layout (Blink `zoom`) instead — paints once at native size. Prefer it on TVs
-  if it measures faster.
+  `fitStage()` snaps to identity within 2% of 1080p **in both fit modes** (so a
+  1920×1070 TV renders pixel-native, not at 0.99×); `?fit=zoom` (default) scales
+  by layout (Blink `zoom`) — paints once at native size.
 
 ## Develop without hardware
 

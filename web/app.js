@@ -88,8 +88,11 @@
     var n = Math.max(0, Math.min(1, (bucket * 250) / 8000));
     var cycle = 1.7 - n * 0.95; // ~1.7s at idle, ~0.75s at redline
     var css = document.documentElement.style;
-    css.setProperty('--fan-dur-a', (1.8 - n * 1.55).toFixed(2) + 's');
-    css.setProperty('--fan-dur-b', (2.0 - n * 1.65).toFixed(2) + 's');
+    // floor the period so a redline engine can't spin the fans absurdly fast:
+    // 0.55 s/rev caps the rotated-bitmap resamples the weak TV must do (no visible
+    // change below ~5000 rpm; the sim never reaches the cap)
+    css.setProperty('--fan-dur-a', Math.max(0.55, 1.8 - n * 1.55).toFixed(2) + 's');
+    css.setProperty('--fan-dur-b', Math.max(0.55, 2.0 - n * 1.65).toFixed(2) + 's');
     css.setProperty('--spark-dur', cycle.toFixed(2) + 's');
     css.setProperty('--spray-dur', (cycle * 0.92).toFixed(2) + 's');
     css.setProperty('--gdi-dur', (cycle * 0.88).toFixed(2) + 's');
@@ -404,7 +407,7 @@
   var SCOPE_WINDOW_US = 90000;  // ~90 ms on screen (~1 crank rev at idle)
   var SCOPE_KEEP_US = 400000;
   var SCOPE_MAX_EDGES = 4096;   // hard cap if rendering stalls (throttled tab)
-  var scopeDrawMs = 50;         // ~20 fps: fluid to the eye, cheap on canvas
+  var scopeDrawMs = 67;         // ~15 fps: fluid enough, fewer full-screen composites
   // per-channel parallel arrays of numbers (no per-edge objects — GC-friendly)
   var liveScope = {
     on: false, tEnd: 0, dispEnd: 0, lastDraw: 0,
@@ -435,8 +438,10 @@
   }
 
   function drawLiveScope() {
-    requestAnimationFrame(drawLiveScope);
     renderScope();
+    // paced by setTimeout, not a 60 Hz rAF that early-returns 2/3 of its wakeups —
+    // fewer main-thread wakeups is a direct win on single-threaded TV renderers
+    setTimeout(drawLiveScope, scopeDrawMs);
   }
 
   // TVs suspend rAF behind OSD overlays / "inactive" states; keep the trace
@@ -447,8 +452,7 @@
 
   function renderScope() {
     var nowMs = performance.now();
-    var dt = nowMs - liveScope.lastDraw;
-    if (dt < scopeDrawMs) return;
+    var dt = nowMs - liveScope.lastDraw;   // paced by the setTimeout loop above
     liveScope.lastDraw = nowMs;
     // advance the display window by wall time, gently pulled toward the newest
     // data; never ahead of it (a stalled stream freezes cleanly, no jitter)
@@ -515,13 +519,15 @@
     var w = window.innerWidth, h = window.innerHeight;
     var scale = Math.min(w / 1920, h / 1080);
     var stage = $('stage');
+    // within 2% of native 1080p: render pixel-exact in BOTH modes — a 0.99× zoom
+    // (e.g. a 1920×1070 TV) softens everything and never pixel-aligns
+    if (Math.abs(scale - 1) < 0.02) scale = 1;
     if (FIT_MODE === 'zoom' && 'zoom' in stage.style) {
       stage.style.transform = '';
       stage.style.zoom = scale;
       stage.style.left = Math.round((w - 1920 * scale) / 2 / scale) + 'px';
       stage.style.top = Math.round((h - 1080 * scale) / 2 / scale) + 'px';
     } else {
-      if (Math.abs(scale - 1) < 0.02) scale = 1; // ≤2% letterbox, no resample
       var tx = Math.round((w - 1920 * scale) / 2);
       var ty = Math.round((h - 1080 * scale) / 2);
       stage.style.transform = scale === 1

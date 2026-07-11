@@ -4,8 +4,9 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["tools/sim_server.py", "--port", "8090"],
-      "port": 8090
+      "runtimeArgs": ["tools/sim_server.py"],
+      "port": 8090,
+      "autoPort": true
     }
   ]
 }

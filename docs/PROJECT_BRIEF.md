@@ -90,21 +90,21 @@ modular design was replaced.
   cells borderless (number badges kept).
 - **Demo→live:** free-runs as demo until first frame, then `.is-live` gates every
   animation behind real telemetry. Scope draws real edge-lists on one `<canvas>`
-  at 20 Hz (wall-clock-advanced window). live.js coalesces to ~12.5 Hz, OR-latches
+  at 15 Hz (setTimeout-paced, wall-clock-advanced window). live.js coalesces to ~12.5 Hz, OR-latches
   firing bits, stale-stream (>2.5 s) watchdog reconnect.
 - **Signal quirks:** CTS/IGF/CURRENT have **no protocol v1 field** → zeroed in live
   mode. HIP + PFC-OFF both show the Fuel Pump bit. Banks show 8 channels (6-cyl sim
   fires 1–6). Full map in `web/README.md`.
-- `js/diag.js` = corner **FPS / WS-per-sec / telemetry-age meter** (tap or press D
-  to hide). No render modes.
+- `js/diag.js` = corner **FPS / WS-per-sec / telemetry-age / resolution meter** (tap or
+  press D to hide; on by default, `?diag=0` disables it for production). No render modes.
 
 ## TV/kiosk performance rules (LOAD-BEARING)
 The display browsers render **single-threaded in software**; a desktop dev browser
 never reproduces the lag. Bench TV measured **8 FPS** on the original decorated
 design. Keep all of these or it janks:
 - Flat skin only — decorative paint is the #1 cost.
-- **Stepped `steps()` animation timing** (fans steps(24), spark/spray step-end
-  opacity pops, CAN steps(48)) — smooth 60 Hz animation damages the screen every frame.
+- **Stepped `steps()` animation timing** (fans steps(16), spark/spray step-end
+  opacity pops, CAN steps(16)) — smooth 60 Hz animation damages the screen every frame.
 - Animated sprites on **cached layers** (`will-change: opacity`) + `contain: paint`
   on bank cells → static page rasterizes once, only sprites re-composite.
 - **Canvas, not mutated SVG**, for anything redrawing continuously (scope).
@@ -116,8 +116,12 @@ design. Keep all of these or it janks:
   beat the year cache.
 
 **FPS history on the client's TV:** decorated 8 → paint-stripped 10 → flat skin
-12–25 → +stepped/layer-isolation "so far so good." If the bare TV still can't hit 60,
-that's its browser ceiling — the mini-PC kiosk (D8) is the real answer.
+12–25 → +stepped/layer-isolation "so far so good." **2026-07-11 FPS pass** (HD TV,
+`1920×1070@1`): coarser stepped anims (fan/CAN 16), 15 fps setTimeout scope, native-
+1080p fit snap, fan redline cap → holds **~12–30**, confirming the software-render
+floor. Aggressive `will-change` layer cuts were tried and **reverted** — on this weak
+TV the per-event repaint cost more than the promoted layers saved. Bare-TV ceiling
+confirmed; the mini-PC kiosk (D8) is the real answer for a locked 60.
 
 ## Current state (works)
 - Firmware **compiles clean** for esp32s3 (~73% app partition free), LittleFS

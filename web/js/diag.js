@@ -11,16 +11,21 @@
 (function () {
   "use strict";
 
+  // On by default so the meter is always there on the plain kiosk URL — you need
+  // it to measure. For the final production kiosk only, disable it with ?diag=0.
+  if (new URLSearchParams(location.search).get("diag") === "0") return;
+
   var box = document.createElement("div");
   box.id = "diag";
   box.innerHTML =
     'FPS <b id="d-fps">--</b> · WS <b id="d-ws">--</b>/s · age <b id="d-age">--</b>ms' +
-    ' <span class="d-hint">tap to hide</span>';
+    ' · <b id="d-res">--</b> <span class="d-hint">tap to hide</span>';
   document.body.appendChild(box);
 
   var fpsEl = document.getElementById("d-fps");
   var wsEl = document.getElementById("d-ws");
   var ageEl = document.getElementById("d-age");
+  var resEl = document.getElementById("d-res");
 
   function toggle() { box.style.display = box.style.display === "none" ? "" : "none"; }
   box.addEventListener("click", toggle);
@@ -44,6 +49,9 @@
   // rAF is throttled (e.g. a backgrounded tab); FPS legitimately reads low then.
   var prev = 0;
   setInterval(function () {
+    // composite resolution: tells us if the TV is blending a 4K framebuffer
+    // (the biggest remaining lever) vs 1080p. innerWidth×innerHeight @ dpr.
+    resEl.textContent = innerWidth + "×" + innerHeight + "@" + (window.devicePixelRatio || 1);
     var s = window.__ecuStats;
     if (!s) return;
     s.msgRate = s.msgs - prev;

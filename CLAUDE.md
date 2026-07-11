@@ -249,8 +249,8 @@ filters anywhere** (do not reintroduce). `app.js` is the view (global `ECU` API)
 `js/live.js` maps decoded protocol frames onto it (coalesced to ~12.5 Hz, latched bits
 OR-ed, stale-stream watchdog forces reconnect). The page free-runs as a demo until the
 first valid frame, then `.is-live` gates every animation behind real telemetry and the
-scope draws real edge-lists on a single `<canvas>` at 20 Hz. `js/diag.js` shows an
-FPS/WS/age corner meter (tap or key D hides). CTS/IGF/CURRENT have **no protocol v1
+scope draws real edge-lists on a single `<canvas>` at 15 Hz. `js/diag.js` shows an
+FPS/WS/age/res corner meter (tap or key D hides; `?diag=0` disables it). CTS/IGF/CURRENT have **no protocol v1
 field** — zeroed in live mode; HIP+PFC-OFF both show the Fuel Pump bit; banks show 8
 channels (6-cyl sim fires 1–6). Signal map in `web/README.md`. `tools/sim_server.py`
 (stdlib Python) serves `web/` + speaks the full binary protocol with the same generators

@@ -20,6 +20,7 @@ import argparse
 import base64
 import hashlib
 import math
+import os
 import struct
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -201,7 +202,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     ap = argparse.ArgumentParser(description="ECU_TESTER dashboard sim server")
-    ap.add_argument("--port", type=int, default=8090)
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8090)))
     args = ap.parse_args()
     print(f"serving {WEB_ROOT} + protocol sim on http://localhost:{args.port}")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
