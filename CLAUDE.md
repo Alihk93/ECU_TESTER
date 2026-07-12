@@ -248,19 +248,28 @@ COIL/INJ/GDI banks with spark/spray bursts. One unified "white navy" background
 filters anywhere** (do not reintroduce). `app.js` is the view (global `ECU` API);
 `js/live.js` maps decoded protocol frames onto it (coalesced to ~12.5 Hz, latched bits
 OR-ed, stale-stream watchdog forces reconnect). The page free-runs as a demo until the
-first valid frame, then `.is-live` gates every animation behind real telemetry and the
-scope draws real edge-lists on a single `<canvas>` at 15 Hz. `js/diag.js` shows an
-FPS/WS/age/res corner meter (tap or key D hides; `?diag=0` disables it). CTS/IGF/CURRENT have **no protocol v1
+first valid frame, then `.is-live` gates every animation behind real telemetry. The CKP/
+CMP scope is a **parametric standing display** (three square waves whose frequency
+tracks RPM, redrawn only when the RPM bucket changes — not a continuous loop and not a
+plot of the WAVEFORM edge-lists, which are still received but decoded minimally).
+`js/diag.js` shows an FPS/WS/age/res corner meter (tap or key D hides; `?diag=0`
+disables it). CTS/IGF/CURRENT have **no protocol v1
 field** — zeroed in live mode; HIP+PFC-OFF both show the Fuel Pump bit; banks show 8
 channels (6-cyl sim fires 1–6). Signal map in `web/README.md`. `tools/sim_server.py`
 (stdlib Python) serves `web/` + speaks the full binary protocol with the same generators
 as the firmware sim — dashboard development needs no hardware:
 `python3 tools/sim_server.py` → `:8090`.
+**Universal old+new TV target (2026-07-11):** all `web/*.js` is **ES5 classic scripts**
+(no `type="module"`, no `const`/`let`/`class`/arrows/template literals) and the layout
+uses **flexbox + margins, not CSS Grid** — the client's older TV (~Chromium 49–60) ran
+modules as no-ops (stuck in demo mode, no WebSocket ever opened) and scrambled Grid
+layouts. See `web/README.md` "Old-TV compatibility" before adding modern JS/CSS syntax.
 **TV/kiosk perf rules are load-bearing** (the display browsers render single-threaded
 in software): no per-frame `:root` CSS-var writes, stepped `steps()` animation timing,
-animated sprites on cached layers (`will-change` + `contain: paint`), data-driven canvas
-scope (never mutated SVG), needles rotate as element transforms, no `aspect-ratio`/
-`min()`, code served `no-cache` / media long-cached — rules + reasons in `web/README.md`.
+animated sprites on cached layers (`will-change` + `contain: paint`), a **static/event-
+driven canvas** scope (never a continuous rAF/setTimeout redraw loop, never mutated
+SVG), needles rotate as element transforms, no `aspect-ratio`/`min()`, code served
+`no-cache` / media long-cached — rules + reasons in `web/README.md`.
 
 **Live data path — DONE end-to-end (firmware sim):** `ws_broadcast()` (client
 enumeration + `httpd_ws_send_frame_async`) and both tasks are implemented. `acq_task`

@@ -49,13 +49,11 @@
   --navy: #33516f;        /* unified marine background ("white navy") */
   --navy-deep: #22374f;   /* scope screens + dial faces */
   --line: rgba(160, 190, 220, 0.45); /* default panel border */
-  --fan-dur-a: 0.83s;
-  --fan-dur-b: 0.97s;
   --spark-dur: 1.11s;
   --spray-dur: 1.02s;
   --gdi-dur: 0.97s;
-  --canh-dur: 1.35s;
-  --canl-dur: 1.55s;
+  --canh-dur: 12s;   /* slow, smooth CAN scroll */
+  --canl-dur: 15s;
 }
 
 * { box-sizing: border-box; }
@@ -229,14 +227,15 @@ html, body {
   border-radius: 14px;
   padding: 18px;
   border: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 2fr;
-  grid-template-rows: 1fr;
-  gap: 12px;
+  /* flex, not grid: CSS grid is unsupported on old TV browsers (< Chromium 57),
+     where it scrambled the cells. Spacing via cell margins (flex `gap` needs 84+). */
+  display: flex;
 }
 
 .status-cell {
   position: relative;
+  flex: 1;
+  margin-left: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -248,6 +247,7 @@ html, body {
   font-weight: 700;
   letter-spacing: .05em;
 }
+.status-cell:first-child { margin-left: 0; }
 .status-cell img {
   flex: 1;
   min-height: 0;
@@ -259,16 +259,20 @@ html, body {
   color: #5fb8ff;
   border: 1px solid rgba(63, 164, 255, 0.6);
 }
-/* Stepped timing everywhere below: a continuous 60 Hz animation damages the
-   screen every frame; steps(N) repaints ~10–35×/s — reads the same on a bench,
-   costs a fraction on software-rendering TVs. */
 .status-cell--fan img {
   width: 180px;
   transform-origin: 50% 50%;
   will-change: transform;
-  animation: fan-spin var(--fan-dur-a) steps(16, end) infinite;
 }
-.status-cell--fan2 img { animation: fan-spin var(--fan-dur-b) steps(16, end) infinite reverse; }
+/* On = ease-in spin-up (one rev) then a steady clockwise spin; both fans turn the
+   SAME way. Off = setFanRunning() freezes the live angle and this transition coasts
+   it to a stop. Constant speed, no RPM link. */
+.status-cell--fan.fan-run img {
+  animation: fan-spin 1.05s ease-in, fan-spin 1.15s linear 1.05s infinite;
+}
+.status-cell--fan.fan-coast img {
+  transition: transform 1.15s cubic-bezier(0.15, 0.6, 0.3, 1);
+}
 
 .status-cell--red {
   color: #ff5b50;
@@ -276,6 +280,7 @@ html, body {
 }
 
 .status-cell--iac {
+  flex: 2;
   color: #e8edf2;
   border: 1px solid rgba(150, 165, 180, 0.35);
 }
@@ -413,7 +418,7 @@ html, body {
   background-repeat: repeat-x;
   background-size: 50% 100%;
   will-change: transform;
-  animation: can-scroll 1.5s steps(16, end) infinite;
+  animation: can-scroll 12s linear infinite; /* slow + smooth (linear, not stepped) */
 }
 @keyframes can-scroll {
   from { transform: translateX(0); }
@@ -593,14 +598,15 @@ html, body {
 .mini-gauges {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(3, 170px);
+  display: flex;
+  flex-wrap: wrap;
   align-content: center;
-  gap: 10px;
 }
 .mini-gauge {
   position: relative;
+  width: calc(50% - 5px); /* 2 columns; 10px gutter via margins (old-TV safe) */
+  height: 170px;
+  margin: 0 0 10px 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(122, 138, 158, 0.28);
@@ -609,6 +615,8 @@ html, body {
   justify-content: center;
   padding: 8px 6px;
 }
+.mini-gauge:nth-child(odd) { margin-right: 10px; }
+.mini-gauge:nth-child(n+5) { margin-bottom: 0; } /* last row: no bottom gutter (match grid) */
 .mg-inner {
   position: relative;
   width: 100%;
@@ -691,14 +699,15 @@ html, body {
 .bank-grid {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .bank-cell {
   position: relative;
+  width: calc(25% - 7.5px); /* 4 columns; 10px gutters via margins (old-TV safe) */
+  height: 146px;            /* 2 rows in the ~302px bank-grid (matches the old grid) */
+  margin: 0 10px 10px 0;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -707,6 +716,8 @@ html, body {
   padding: 4px;
   contain: paint; /* spark/spray damage never repaints outside the cell */
 }
+.bank-cell:nth-child(4n) { margin-right: 0; }
+.bank-cell:nth-child(n+5) { margin-bottom: 0; }
 
 .bank-cell > img {
   height: 92px;
@@ -797,10 +808,7 @@ html, body {
   opacity: 0;
 }
 
-/* fans freeze in place while their status bit is clear */
-.stage.is-live .status-cell--fan:not(.is-active) img {
-  animation-play-state: paused;
-}
+/* fans are gated by setFanRunning (fan-run / fan-coast classes) in app.js, not CSS */
 
 /* IMO / HIP cells go dark when inactive */
 .stage.is-live .status-cell--red:not(.is-active) {

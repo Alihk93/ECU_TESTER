@@ -75,53 +75,90 @@ mini-PC**.
 
 ## Web dashboard — HTML/CSS/JS (current)
 Files: `web/index.html`, `web/style.css`, `web/app.js` (view layer + global `ECU`
-API), `web/js/live.js` (frames→ECU), `js/protocol.js` (decoder), `js/websocket.js`
-(auto-reconnect), `js/diag.js` (perf meter). **No `components/` dir** — the old
-modular design was replaced.
-- **Layout:** fixed 1920×1080 canvas fitted via Blink `zoom` (fallback transform).
-  Top bar (DEVICE/UPTIME/white logo/VOLTAGE/CURRENT 7-seg), status grid
-  (FAN1/FAN2/IMO/HIP/IAC), CKP/CMP1/CMP2 **canvas** oscilloscope + decorative CAN,
-  relay indicator row, big RPM dial, six 0–5 V mini gauges (CTS/MAF/MAP/IAT/5V/IGF),
-  8-cell COIL/INJ/GDI banks with spark/spray bursts.
+API + `ECUqs()`), `web/js/protocol.js` (decoder, exposes `window.ECUProto`),
+`js/websocket.js` (auto-reconnect, exposes `window.EcuSocket`), `js/live.js`
+(frames→ECU), `js/diag.js` (perf meter). **No `components/` dir**, and (2026-07-11)
+**no ES modules** — all five are classic `<script>` tags loaded in that order; see
+"Universal old+new TV target" below.
+- **Layout:** fixed 1920×1080 canvas fitted via Blink `zoom` (fallback transform),
+  **flexbox + margin gutters, not CSS Grid**. Top bar (DEVICE/UPTIME/white
+  logo/VOLTAGE/CURRENT 7-seg), status grid (FAN1/FAN2/IMO/HIP/IAC), CKP/CMP1/CMP2
+  **canvas** oscilloscope + decorative CAN, relay indicator row, big RPM dial, six
+  0–5 V mini gauges (CTS/MAF/MAP/IAT/5V/IGF), 8-cell COIL/INJ/GDI banks with
+  spark/spray bursts.
 - **THE FLAT MARINE SKIN IS THE DESIGN** (client decision 2026-07-10). Unified
   "white navy" background (`--navy` #33516f, screens `--navy-deep` #22374f), flat
   colors + 1px borders only. **No gradients / shadows / glows / filters / 7-seg
   ghost digits anywhere — do not reintroduce.** Logo = `logo_w.png` (white). Bank
-  cells borderless (number badges kept).
+  cells borderless (number badges kept). IMO indicator = `imo2.png`, SW-ON =
+  `swon2.png` (renamed from `immo.png`/`swon.png` on image swap, 2026-07-11 — new
+  filenames beat the year-long media cache on the kiosk).
 - **Demo→live:** free-runs as demo until first frame, then `.is-live` gates every
-  animation behind real telemetry. Scope draws real edge-lists on one `<canvas>`
-  at 15 Hz (setTimeout-paced, wall-clock-advanced window). live.js coalesces to ~12.5 Hz, OR-latches
-  firing bits, stale-stream (>2.5 s) watchdog reconnect.
+  animation behind real telemetry. The scope is a **parametric standing display**
+  (2026-07-11) — three clean square waves per lane (CKP/CMP1/CMP2), frequency
+  tracking RPM, redrawn only when the RPM bucket changes (no continuous redraw
+  loop); WAVEFORM frames still arrive but are decoded minimally, not plotted. Fans
+  both spin **clockwise**, constant speed, gated on/off by FAN1/FAN2 status bits
+  with a CSS ease-in spin-up and coast-down transition (no more RPM-scaled speed
+  or fan2 reverse). live.js coalesces to ~12.5 Hz, OR-latches firing bits,
+  stale-stream (>2.5 s) watchdog reconnect.
 - **Signal quirks:** CTS/IGF/CURRENT have **no protocol v1 field** → zeroed in live
   mode. HIP + PFC-OFF both show the Fuel Pump bit. Banks show 8 channels (6-cyl sim
   fires 1–6). Full map in `web/README.md`.
 - `js/diag.js` = corner **FPS / WS-per-sec / telemetry-age / resolution meter** (tap or
   press D to hide; on by default, `?diag=0` disables it for production). No render modes.
 
+## Universal old+new TV target (2026-07-11)
+The client tested on an **older TV (~Chromium 49–60)** and hit two silent
+breakages fixed this session — see `web/README.md` "Old-TV compatibility" for
+the full list:
+- **ES modules never execute** pre-Chromium-61 → dashboard stuck in demo mode
+  forever (WebSocket never opened). Fixed: all JS is ES5 classic scripts.
+- **CSS Grid unsupported** pre-Chromium-57 → status grid/mini-gauges/banks
+  scrambled. Fixed: flexbox + fixed margin gutters.
+- A `setTimeout`-paced continuous scope redraw **flooded** the weak TV (backlog
+  piles up faster than it paints, FPS collapsed to 3). Fixed by removing the
+  continuous redraw entirely (parametric standing scope, redraws on state change).
+
 ## TV/kiosk performance rules (LOAD-BEARING)
 The display browsers render **single-threaded in software**; a desktop dev browser
 never reproduces the lag. Bench TV measured **8 FPS** on the original decorated
 design. Keep all of these or it janks:
 - Flat skin only — decorative paint is the #1 cost.
-- **Stepped `steps()` animation timing** (fans steps(16), spark/spray step-end
-  opacity pops, CAN steps(16)) — smooth 60 Hz animation damages the screen every frame.
+- **Stepped `steps()` animation timing** (spark/spray step-end opacity pops, CAN
+  steps(16)) — smooth 60 Hz animation damages the screen every frame. Fans use a
+  CSS `animation` (spin-up + steady) / `transition` (coast) pair instead, toggled
+  by JS on status-bit change — no per-frame cost either way.
 - Animated sprites on **cached layers** (`will-change: opacity`) + `contain: paint`
   on bank cells → static page rasterizes once, only sprites re-composite.
-- **Canvas, not mutated SVG**, for anything redrawing continuously (scope).
+- **Canvas, not mutated SVG**, for the scope — and prefer **no continuous redraw
+  loop** at all (state-change-driven) over even a cheap per-frame one; if a
+  continuous loop is unavoidable, drive it with `requestAnimationFrame`, never
+  `setTimeout` (a fixed interval floods a TV that can't keep up).
 - Needles rotate as **element transforms** (own SVG), never a group inside the dial.
 - **No per-frame `:root` CSS-var writes** (tempo quantized to 250-rpm buckets).
 - **No `aspect-ratio` / `min()`** (unsupported on old TV Chromium; RPM bezel fixed 384×384).
+- **No CSS Grid** (unsupported pre-Chromium-57) — flexbox + margin gutters only.
 - Firmware serves HTML/JS/CSS **`no-cache`**, media long-cached (kiosk otherwise runs
-  year-stale JS). New assets get new filenames (`logo_w`, `spark_lit`, `spray_gdi`) to
-  beat the year cache.
+  year-stale JS). New assets get new filenames (`logo_w`, `spark_lit`, `spray_gdi`,
+  `imo2`, `swon2`) to beat the year cache.
 
 **FPS history on the client's TV:** decorated 8 → paint-stripped 10 → flat skin
-12–25 → +stepped/layer-isolation "so far so good." **2026-07-11 FPS pass** (HD TV,
-`1920×1070@1`): coarser stepped anims (fan/CAN 16), 15 fps setTimeout scope, native-
-1080p fit snap, fan redline cap → holds **~12–30**, confirming the software-render
-floor. Aggressive `will-change` layer cuts were tried and **reverted** — on this weak
-TV the per-event repaint cost more than the promoted layers saved. Bare-TV ceiling
-confirmed; the mini-PC kiosk (D8) is the real answer for a locked 60.
+12–25 → +stepped/layer-isolation "so far so good." **2026-07-11 pass 1** (HD TV,
+`1920×1070@1`): coarser stepped anims, 15 fps setTimeout scope, native-1080p fit
+snap, fan redline cap → held ~12–30 (software-render floor). `will-change`
+layer cuts were tried and **reverted** (per-event repaint cost more than the
+promoted layers saved on this weak TV). **2026-07-11 pass 2 (universal-TV pass):**
+testing on the client's *older* TV surfaced two breakages invisible on the newer
+one — ES modules silently dead (stuck in permanent demo mode) and CSS Grid
+scrambling the layout — fixed by going ES5 + flexbox (see "Universal old+new TV
+target" above). That same pass added a smooth scope drift, which **flooded the
+old TV via `setTimeout`** (FPS crashed to 3); fixed by dropping the scope to a
+**parametric standing display with no continuous redraw loop** (state-change-
+driven only). Old TV measured **FPS 9** / new TV **FPS 20** just before the
+no-continuous-redraw fix — not yet re-measured after it. Confirm on both TVs
+before calling this done; the mini-PC kiosk (D8) remains the fallback for a
+guaranteed locked 60.
 
 ## Current state (works)
 - Firmware **compiles clean** for esp32s3 (~73% app partition free), LittleFS

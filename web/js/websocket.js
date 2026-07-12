@@ -1,32 +1,38 @@
-/* ECU_TESTER :: websocket.js — connection management with auto-reconnect.
-   Owns the socket; hands decoded frames to a callback. Uses protocol.js. */
-import { decodeFrame } from "./protocol.js";
+/* ECU_TESTER :: websocket.js — ES5 classic script (old TV browsers). Connection
+   management with auto-reconnect. Owns the socket; hands decoded frames to a
+   callback. Uses window.ECUProto (protocol.js). Exposes window.EcuSocket. */
+(function (global) {
+  "use strict";
 
-export class EcuSocket {
-  constructor(url, { onFrame, onStatus } = {}) {
+  function EcuSocket(url, opts) {
+    opts = opts || {};
     this.url = url;
-    this.onFrame = onFrame || (() => {});
-    this.onStatus = onStatus || (() => {});
+    this.onFrame = opts.onFrame || function () {};
+    this.onStatus = opts.onStatus || function () {};
     this.ws = null;
     this._retry = 500; // ms, backs off to 5s
   }
-  connect() {
+  EcuSocket.prototype.connect = function () {
+    var self = this;
     this.onStatus("connecting");
     this.ws = new WebSocket(this.url);
     this.ws.binaryType = "arraybuffer";
-    this.ws.onopen = () => { this._retry = 500; this.onStatus("connected"); };
-    this.ws.onclose = () => { this.onStatus("disconnected"); this._reconnect(); };
-    this.ws.onerror = () => this.ws && this.ws.close();
-    this.ws.onmessage = (ev) => {
-      const frame = decodeFrame(ev.data); // null => CRC/format failure, dropped
-      if (frame) this.onFrame(frame);
+    this.ws.onopen = function () { self._retry = 500; self.onStatus("connected"); };
+    this.ws.onclose = function () { self.onStatus("disconnected"); self._reconnect(); };
+    this.ws.onerror = function () { if (self.ws) self.ws.close(); };
+    this.ws.onmessage = function (ev) {
+      var frame = global.ECUProto.decodeFrame(ev.data); // null => CRC/format failure, dropped
+      if (frame) self.onFrame(frame);
     };
-  }
-  send(arrayBuffer) {
+  };
+  EcuSocket.prototype.send = function (arrayBuffer) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(arrayBuffer);
-  }
-  _reconnect() {
-    setTimeout(() => this.connect(), this._retry);
+  };
+  EcuSocket.prototype._reconnect = function () {
+    var self = this;
+    setTimeout(function () { self.connect(); }, this._retry);
     this._retry = Math.min(this._retry * 2, 5000);
-  }
-}
+  };
+
+  global.EcuSocket = EcuSocket;
+})(window);

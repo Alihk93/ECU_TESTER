@@ -13,7 +13,7 @@
 
   // On by default so the meter is always there on the plain kiosk URL — you need
   // it to measure. For the final production kiosk only, disable it with ?diag=0.
-  if (new URLSearchParams(location.search).get("diag") === "0") return;
+  if (window.ECUqs && window.ECUqs("diag") === "0") return;
 
   var box = document.createElement("div");
   box.id = "diag";

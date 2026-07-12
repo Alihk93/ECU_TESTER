@@ -25,6 +25,29 @@
   /* ---------------- Helpers ---------------- */
   function $(id) { return document.getElementById(id); }
 
+  // ES5 query-string reader (URLSearchParams is unavailable on old TV browsers)
+  window.ECUqs = function (name) {
+    var q = location.search;
+    if (!q) return null;
+    var pairs = q.replace(/^\?/, '').split('&');
+    for (var i = 0; i < pairs.length; i++) {
+      var eq = pairs[i].indexOf('=');
+      var k = decodeURIComponent(eq < 0 ? pairs[i] : pairs[i].slice(0, eq));
+      if (k === name) return eq < 0 ? '' : decodeURIComponent(pairs[i].slice(eq + 1));
+    }
+    return null;
+  };
+
+  // thousands separator without toLocaleString (locale formatting is spotty on old TVs)
+  function commafy(n) {
+    var s = String(n), out = '', c = 0;
+    for (var i = s.length - 1; i >= 0; i--) {
+      out = s.charAt(i) + out;
+      if (++c % 3 === 0 && i > 0) out = ',' + out;
+    }
+    return out;
+  }
+
   function polar(cx, cy, r, aDeg) {
     var a = (aDeg * Math.PI) / 180;
     return { x: cx + r * Math.sin(a), y: cy - r * Math.cos(a) };
@@ -68,12 +91,13 @@
       // glides the needle between the throttled live updates
       $('rpm-needle').style.transform = 'rotate(' + angle + 'deg)';
     }
-    var text = Math.round(state.rpm).toLocaleString('en-US');
+    var text = commafy(Math.round(state.rpm));
     if (text !== rpmDrawn.text) {
       rpmDrawn.text = text;
       $('rpm-reading').textContent = text;
     }
     updateTempo();
+    scopeTick(); // redraw the scope only when the RPM frequency changes
   }
 
   /* Animation tempo scales with RPM: fans, sparks, sprays, crank-derived traces.
@@ -88,11 +112,6 @@
     var n = Math.max(0, Math.min(1, (bucket * 250) / 8000));
     var cycle = 1.7 - n * 0.95; // ~1.7s at idle, ~0.75s at redline
     var css = document.documentElement.style;
-    // floor the period so a redline engine can't spin the fans absurdly fast:
-    // 0.55 s/rev caps the rotated-bitmap resamples the weak TV must do (no visible
-    // change below ~5000 rpm; the sim never reaches the cap)
-    css.setProperty('--fan-dur-a', Math.max(0.55, 1.8 - n * 1.55).toFixed(2) + 's');
-    css.setProperty('--fan-dur-b', Math.max(0.55, 2.0 - n * 1.65).toFixed(2) + 's');
     css.setProperty('--spark-dur', cycle.toFixed(2) + 's');
     css.setProperty('--spray-dur', (cycle * 0.92).toFixed(2) + 's');
     css.setProperty('--gdi-dur', (cycle * 0.88).toFixed(2) + 's');
@@ -101,7 +120,7 @@
   /* ================= Indicators ================= */
   var INDICATORS = [
     { name: 'BAT-ON',  color: 'red',   img: 'assets/img/bat.png',      cls: 'indicator--bat',  alt: 'Battery warning' },
-    { name: 'SW-ON',   color: 'red',   img: 'assets/img/swon.png',     cls: 'indicator--swon', alt: 'Switch on / key' },
+    { name: 'SW-ON',   color: 'red',   img: 'assets/img/swon2.png',    cls: 'indicator--swon', alt: 'Switch on / key' },
     { name: 'MRC+',    color: 'green', img: 'assets/img/relay-nc.png', cls: '',                alt: 'Relay MRC+' },
     { name: 'MRC-',    color: 'red',   img: 'assets/img/relay-no.png', cls: '',                alt: 'Relay MRC-' },
     { name: 'ETC-ON',  color: 'red',   img: 'assets/img/relay-no.png', cls: '',                alt: 'Relay ETC-ON' },
@@ -206,36 +225,24 @@
     c.rot.style.transform = 'rotate(' + mgDeg(val).toFixed(1) + 'deg)';
   }
 
-  /* ================= Oscilloscope ================= */
-  // All three CKP/CMP lanes render into ONE canvas: SVG path mutation is the
-  // priciest repeated paint on single-threaded TV renderers. CAN stays a CSS
-  // background scrolled on the compositor.
-  var TRACES = {
-    ckp:  '01011010110101101011011010110101101011010110101101',
-    cmp1: '00011110000111100011110000111100011110000111100011',
-    cmp2: '01101010000110001100001101000011010000110100001101',
-    canh: '00110010001100100011001000110010001100100011001000',
-    canl: '11001101110011011100110111001101110011011100110111',
-  };
-
-  function wavePath(bits, w, h) {
-    var n = bits.length, step = w / n, hi = 4, lo = h - 4;
-    var d = '', x = 0;
-    for (var i = 0; i < n; i++) {
-      var y = bits[i] === '1' ? hi : lo;
-      d += (i === 0 ? 'M0 ' + y : ' L' + x.toFixed(1) + ' ' + y);
-      x += step;
-      d += ' L' + x.toFixed(1) + ' ' + y;
-    }
-    return d;
-  }
+  /* ================= Oscilloscope — standing square waves =================
+     Real-scope look: each trace is a clean square wave that STANDS in place
+     (no scrolling — far cheaper on TV renderers). Only amplitude, frequency
+     and duty change; frequency tracks RPM, amp/duty are per-signal. The canvas
+     redraws only when the RPM-frequency bucket changes, so it's near-static. */
+  // freqBase = cycles across the plot at idle; freqRpm adds cycles with RPM.
+  var SCOPE_LANES = [
+    { duty: 0.50, amp: 0.84, freqBase: 9, freqRpm: 20 }, // CKP  — fast, even
+    { duty: 0.30, amp: 0.62, freqBase: 3, freqRpm: 7 },  // CMP1 — slow, narrow highs
+    { duty: 0.46, amp: 0.74, freqBase: 5, freqRpm: 11 }, // CMP2 — medium
+  ];
+  var CAN_LANES = [['hi', 12, 0.5], ['lo', 16, 0.4]]; // [suffix, cycles, duty] (decorative)
 
   var scopeCv = { el: null, ctx: null, w: 0, h: 0 };
 
   function sizeScopeCanvas() {
     if (!scopeCv.el) return;
-    // backing store at on-screen resolution (stage scale included), capped at
-    // 1.5× CSS px — crisp enough at 4K without quadrupling the fill cost
+    // backing store at on-screen resolution (stage scale included), capped at 1.5× CSS px
     var r = scopeCv.el.getBoundingClientRect();
     var s = Math.min(window.devicePixelRatio || 1, 1.5);
     var w = Math.max(1, Math.round(r.width * s));
@@ -243,52 +250,84 @@
     if (w === scopeCv.w && h === scopeCv.h) return;
     scopeCv.w = scopeCv.el.width = w;
     scopeCv.h = scopeCv.el.height = h;
-    if (!liveScope.on) drawScopeDemo(); // live redraws on its own tick
+    drawScope();
   }
 
-  /* Static demo pattern (pre-connect only — real edges replace it). */
-  function drawScopeDemo() {
+  function scopeRpmFactor() { return Math.max(0, Math.min(1, state.rpm / 8000)); }
+
+  /* Stroke one clean standing square wave centred on yMid. */
+  function strokeSquareWave(ctx, W, cycles, duty, ampFrac, yMid, halfMax) {
+    var half = ampFrac * halfMax, yHi = yMid - half, yLo = yMid + half;
+    var period = W / Math.max(0.5, cycles);
+    ctx.beginPath();
+    ctx.moveTo(0, yLo);
+    for (var x = 0; x < W; x += period) {
+      var xRise = x + period * (1 - duty), xFall = x + period;
+      ctx.lineTo(Math.min(xRise, W), yLo);
+      if (xRise < W) ctx.lineTo(xRise, yHi);
+      ctx.lineTo(Math.min(xFall, W), yHi);
+      if (xFall < W) ctx.lineTo(xFall, yLo);
+    }
+    ctx.stroke();
+  }
+
+  /* Redraw the 3 CKP/CMP lanes (standing waves at the current RPM frequency). */
+  function drawScope() {
     var ctx = scopeCv.ctx, W = scopeCv.w, H = scopeCv.h;
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = state.scopeColor;
     ctx.lineWidth = 2;
-    ['ckp', 'cmp1', 'cmp2'].forEach(function (key, lane) {
-      var bits = TRACES[key];
-      var laneH = H / 3;
-      var yHi = lane * laneH + laneH * 0.16, yLo = lane * laneH + laneH * 0.84;
-      var step = W / bits.length;
-      ctx.beginPath();
-      var y = bits[0] === '1' ? yHi : yLo;
-      ctx.moveTo(0, y);
-      for (var i = 1; i < bits.length; i++) {
-        var ny = bits[i] === '1' ? yHi : yLo;
-        if (ny !== y) { ctx.lineTo(i * step, y); ctx.lineTo(i * step, ny); y = ny; }
-      }
-      ctx.lineTo(W, y);
-      ctx.stroke();
-    });
+    ctx.lineJoin = 'miter';
+    var laneH = H / 3, f = scopeRpmFactor();
+    for (var i = 0; i < 3; i++) {
+      var L = SCOPE_LANES[i];
+      strokeSquareWave(ctx, W, L.freqBase + f * L.freqRpm, L.duty, L.amp,
+                       i * laneH + laneH / 2, laneH * 0.36);
+    }
+  }
+
+  /* The CKP/CMP canvas redraws ONLY when the RPM frequency bucket changes — a
+     continuous per-frame scope redraw was the single biggest cost on software-
+     composited TVs. (Motion is kept on the CAN traces via cheap CSS scroll.) */
+  var scopeFreqBucket = -1;
+  function scopeTick() {
+    var bucket = Math.round(scopeRpmFactor() * 24);
+    if (bucket === scopeFreqBucket) return;
+    scopeFreqBucket = bucket;
+    drawScope();
+  }
+
+  /* SVG-path clean square wave for the CAN background images. */
+  function squareWavePath(cycles, duty, w, h) {
+    var hi = 4, lo = h - 4, period = w / cycles, d = 'M0 ' + lo;
+    for (var x = 0; x < w; x += period) {
+      var xr = (x + period * (1 - duty)).toFixed(1), xf = Math.min(x + period, w).toFixed(1);
+      d += ' L' + xr + ' ' + lo + ' L' + xr + ' ' + hi + ' L' + xf + ' ' + hi + ' L' + xf + ' ' + lo;
+    }
+    return d;
   }
 
   function buildScope() {
     scopeCv.el = $('scope-canvas');
     scopeCv.ctx = scopeCv.el.getContext('2d');
     sizeScopeCanvas();
-    // CAN (decorative): static pattern as background-image on a scrolling div —
-    // the transform stays on the compositor; an animated transform inside an
-    // SVG repaints per frame on TV browsers.
-    [['canh', '.can-scroll--hi'], ['canl', '.can-scroll--lo']].forEach(function (p) {
+    // CAN (decorative): clean standing square waves as static background images —
+    // no scroll (all 5 traces stand still).
+    CAN_LANES.forEach(function (c) {
       var svg =
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 34' preserveAspectRatio='none'>" +
-        "<path d='" + wavePath(TRACES[p[0]], 1000, 34) + "' fill='none' stroke='#83cf92' stroke-width='2'/></svg>";
-      document.querySelector(p[1]).style.backgroundImage =
+        "<path d='" + squareWavePath(c[1], c[2], 1000, 34) + "' fill='none' stroke='#83cf92' stroke-width='2'/></svg>";
+      document.querySelector('.can-scroll--' + c[0]).style.backgroundImage =
         'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
     });
   }
 
-  function updateScopeColor() {
-    if (!liveScope.on) drawScopeDemo(); // live picks the color up next tick
-  }
+  function updateScopeColor() { drawScope(); }
+
+  /* WAVEFORM frames still arrive (js/live.js) but aren't plotted — the scope is a
+     clean parametric standing display now. No-op keeps the ECU.feedWaveform contract. */
+  function feedWaveform() {}
 
   /* ================= Output driver banks ================= */
   var bankCells = { coil: [], inj: [], gdi: [] }; // 1-based cell elements
@@ -385,6 +424,32 @@
   }
 
   /** map: fan1|fan2|imo|hip -> truthy = active (spinning / lit). */
+  /* Fan spin control: CSS does the ease-in spin-up and steady clockwise spin;
+     on stop we freeze at the live angle and a CSS transition coasts it down.
+     Fires only on on/off transitions — no per-frame JS (TV-friendly). */
+  function fanAngle(img) {
+    var m = getComputedStyle(img).transform;
+    if (!m || m === 'none') return 0;
+    var p = m.slice(m.indexOf('(') + 1).split(',');
+    return Math.atan2(parseFloat(p[1]), parseFloat(p[0])) * 180 / Math.PI;
+  }
+  function setFanRunning(cell, on) {
+    var img = cell.querySelector('img');
+    var running = cell.classList.contains('fan-run');
+    if (on && !running) {
+      cell.classList.remove('fan-coast');
+      img.style.transform = '';
+      cell.classList.add('fan-run');           // CSS: ease-in spin-up -> steady spin
+    } else if (!on && running) {
+      var deg = fanAngle(img);
+      cell.classList.remove('fan-run');
+      img.style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
+      void img.offsetWidth;                     // reflow so the coast starts at deg
+      cell.classList.add('fan-coast');
+      img.style.transform = 'rotate(' + (deg + 150).toFixed(1) + 'deg)';
+    }
+  }
+
   var statusCellEls = null;
   function setStatusCells(map) {
     if (!statusCellEls) {
@@ -394,103 +459,16 @@
       });
     }
     for (var key in map) {
-      if (statusCellEls[key]) statusCellEls[key].classList.toggle('is-active', !!map[key]);
+      var el = statusCellEls[key];
+      if (!el) continue;
+      if (key === 'fan1' || key === 'fan2') setFanRunning(el, !!map[key]);
+      else el.classList.toggle('is-active', !!map[key]);
     }
   }
 
-  /* ================= Live oscilloscope =================
-     Renders WAVEFORM edge-list frames (docs/PROTOCOL.md §4, mode 1) as real
-     square waves over a rolling window, replacing the static demo pattern —
-     the CKP 60-2 missing tooth and cam sync are the actual device timing.
-     Canvas strokes at ~25 fps with a wall-clock-advanced window, so the trace
-     scrolls smoothly instead of jumping once per data batch. */
-  var SCOPE_WINDOW_US = 90000;  // ~90 ms on screen (~1 crank rev at idle)
-  var SCOPE_KEEP_US = 400000;
-  var SCOPE_MAX_EDGES = 4096;   // hard cap if rendering stalls (throttled tab)
-  var scopeDrawMs = 67;         // ~15 fps: fluid enough, fewer full-screen composites
-  // per-channel parallel arrays of numbers (no per-edge objects — GC-friendly)
-  var liveScope = {
-    on: false, tEnd: 0, dispEnd: 0, lastDraw: 0,
-    t: { 0: [], 1: [], 2: [] }, l: { 0: [], 1: [], 2: [] },
-  };
-
-  /** wave: decoded WAVEFORM frame with parallel tUs/level arrays (protocol.js). */
-  function feedWaveform(channel, wave) {
-    if (!(channel in liveScope.t) || !wave || !wave.count) return;
-    var T = liveScope.t[channel], L = liveScope.l[channel];
-    for (var i = 0; i < wave.count; i++) {
-      T.push(wave.tUs[i]);
-      L.push(wave.level[i]);
-    }
-    var tLast = wave.tUs[wave.count - 1];
-    if (tLast > liveScope.tEnd) liveScope.tEnd = tLast;
-    if (T.length > SCOPE_MAX_EDGES) {
-      var cut = T.length - SCOPE_MAX_EDGES;
-      T.splice(0, cut);
-      L.splice(0, cut);
-    }
-    if (!liveScope.on) {
-      liveScope.on = true;
-      liveScope.dispEnd = liveScope.tEnd;
-      liveScope.lastDraw = performance.now();
-      requestAnimationFrame(drawLiveScope);
-    }
-  }
-
-  function drawLiveScope() {
-    renderScope();
-    // paced by setTimeout, not a 60 Hz rAF that early-returns 2/3 of its wakeups —
-    // fewer main-thread wakeups is a direct win on single-threaded TV renderers
-    setTimeout(drawLiveScope, scopeDrawMs);
-  }
-
-  // TVs suspend rAF behind OSD overlays / "inactive" states; keep the trace
-  // alive on a slow fallback tick whenever rAF stalls.
-  setInterval(function () {
-    if (liveScope.on && performance.now() - liveScope.lastDraw > 500) renderScope();
-  }, 500);
-
-  function renderScope() {
-    var nowMs = performance.now();
-    var dt = nowMs - liveScope.lastDraw;   // paced by the setTimeout loop above
-    liveScope.lastDraw = nowMs;
-    // advance the display window by wall time, gently pulled toward the newest
-    // data; never ahead of it (a stalled stream freezes cleanly, no jitter)
-    liveScope.dispEnd = Math.min(
-      liveScope.tEnd,
-      liveScope.dispEnd + dt * 1000 + (liveScope.tEnd - liveScope.dispEnd) * 0.1
-    );
-    if (liveScope.tEnd - liveScope.dispEnd > 150000) {
-      liveScope.dispEnd = liveScope.tEnd - 50000; // fell too far behind: catch up
-    }
-    var tEnd = liveScope.dispEnd;
-    var t0 = tEnd - SCOPE_WINDOW_US;
-    var cutoff = liveScope.tEnd - SCOPE_KEEP_US;
-    var ctx = scopeCv.ctx, W = scopeCv.w, H = scopeCv.h, laneH = H / 3;
-    ctx.clearRect(0, 0, W, H);
-    ctx.strokeStyle = state.scopeColor;
-    ctx.lineWidth = 2;
-    for (var ch = 0; ch < 3; ch++) {
-      var T = liveScope.t[ch], L = liveScope.l[ch];
-      var k = 0;
-      while (k < T.length - 1 && T[k + 1] < cutoff) k++;
-      if (k > 0) { T.splice(0, k); L.splice(0, k); }
-      var yHi = ch * laneH + laneH * 0.16, yLo = ch * laneH + laneH * 0.84;
-      var start = 0;
-      for (var i = 0; i < T.length; i++) { if (T[i] <= t0) start = i; else break; }
-      ctx.beginPath();
-      var started = false, prevY = yLo;
-      for (i = start; i < T.length; i++) {
-        if (T[i] > tEnd) break;
-        var x = Math.max(0, ((T[i] - t0) / SCOPE_WINDOW_US) * W);
-        var y = L[i] ? yHi : yLo;
-        if (!started) { ctx.moveTo(0, y); started = true; }
-        else { ctx.lineTo(x, prevY); ctx.lineTo(x, y); }
-        prevY = y;
-      }
-      if (started) { ctx.lineTo(W, prevY); ctx.stroke(); }
-    }
-  }
+  /* The live scrolling scope was removed: the oscilloscope is now a standing
+     parametric display (see the Oscilloscope section above). WAVEFORM frames
+     still arrive via js/live.js but are not plotted. */
 
   /* ================= Uptime clock ================= */
   var uptimeSeconds = 0;
@@ -500,7 +478,7 @@
     var m = Math.floor(uptimeSeconds / 60) % 60;
     var s = uptimeSeconds % 60;
     $('uptime').textContent = [h, m, s].map(function (x) {
-      return String(x).padStart(2, '0');
+      return (x < 10 ? '0' : '') + x;
     }).join(':');
   }, 1000);
 
@@ -512,7 +490,7 @@
      paints once at native size, nothing is resampled per frame. */
   // default to layout zoom when Blink supports it (every TV browser we target);
   // ?fit=transform opts back into the transform path
-  var FIT_MODE = new URLSearchParams(location.search).get('fit') ||
+  var FIT_MODE = ECUqs('fit') ||
     ('zoom' in document.documentElement.style ? 'zoom' : 'transform');
 
   function fitStage() {
@@ -616,5 +594,7 @@
   updateReadouts();
   updateIac();
   updateCursor();
+  // demo: fans spin (clockwise, eased) until live telemetry gates them
+  document.querySelectorAll('.status-cell--fan').forEach(function (c) { c.classList.add('fan-run'); });
   fitStage();
 })();

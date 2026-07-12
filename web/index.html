@@ -78,7 +78,7 @@
             <img src="assets/img/fan.png" alt="FAN 2">
           </div>
           <div class="status-cell status-cell--red" data-cell="imo">
-            <img src="assets/img/immo.png" alt="IMO immobilizer">
+            <img src="assets/img/imo2.png" alt="IMO immobilizer">
           </div>
           <div class="status-cell status-cell--red" data-cell="hip">
             <img src="assets/img/hip.png" alt="HIP high-pressure pump">
@@ -205,8 +205,13 @@
   </div>
 </div>
 
+<!-- Classic scripts (NOT ES modules): old TV browsers (< Chromium 61) don't run
+     type="module", which left them stuck in demo mode. Load order matters:
+     app.js (ECU API + ECUqs) -> protocol -> websocket -> live -> diag. -->
 <script src="app.js"></script>
-<script type="module" src="js/live.js"></script>
+<script src="js/protocol.js"></script>
+<script src="js/websocket.js"></script>
+<script src="js/live.js"></script>
 <script src="js/diag.js"></script>
 </body>
 </html>
