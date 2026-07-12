@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "5c61068 · perf(web): TV FPS tuning + dev-server autoPort",
-  "lastCommitDate": "2026-07-11T06:29:22+03:00",
+  "lastCommit": "85fe981 · feat(web): universal old-TV compat (ES5+flexbox) + parametric scope + fan rework",
+  "lastCommitDate": "2026-07-12T07:38:10+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-11T03:29:59.124965643Z"
+  "lastSync": "2026-07-12T04:38:19.753966868Z"
 }
