@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "85fe981 · feat(web): universal old-TV compat (ES5+flexbox) + parametric scope + fan rework",
-  "lastCommitDate": "2026-07-12T07:38:10+03:00",
+  "lastCommit": "af9bee3 · perf(web+fw): TV FPS pass — waveform stream off by default, stepped CAN, composited wobble + old-TV compat fixes (flex gap/inset)",
+  "lastCommitDate": "2026-07-12T08:14:56+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-12T04:38:19.753966868Z"
+  "lastSync": "2026-07-12T05:15:06.744131831Z"
 }
