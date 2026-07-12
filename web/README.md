@@ -47,6 +47,16 @@ breakages and their fixes:
   unpredictably instead of erroring. Fix: flexbox + fixed `margin` gutters
   (`flex-wrap: wrap` + per-cell `width: calc(N% - gutter)` + `:nth-child` margin
   resets) for the status grid, mini-gauges and the coil/inj/GDI banks.
+- **Flexbox `gap` needs Chromium 84+** — silently ignored below that, so every
+  gutter collapses (panels butt together). Fix (2026-07-12): all gaps are child
+  margins (`.x > * + * { margin-left: … }` or explicit per-child margins).
+- **`inset:` needs Chromium 87+** — ignored below, which un-pins an absolutely
+  positioned box entirely (the outer `.frame` shrank to content). Fix: explicit
+  `top/right/bottom/left`.
+- **`justify-content: space-evenly` needs Chromium 60+** (falls back to
+  flex-start, clumping items left) — use `space-around`.
+- **`NodeList.forEach` needs Chromium 51+** — `querySelectorAll(...).forEach`
+  throws on older TVs; use an indexed `for` loop (Array `.forEach` is fine).
 - **No `URLSearchParams`, `String.padStart`, `Number.prototype.toLocaleString`**
   — replaced with `window.ECUqs(name)` (hand-rolled query parser, set by
   app.js) and manual zero-padding / thousands-comma formatting.
@@ -64,7 +74,8 @@ Whenever you add JS or CSS, grep for regressions before committing:
 ## Performance meter
 
 `js/diag.js` shows a corner meter — **FPS** (real redraw rate) · **WS/s**
-(protocol frames received, ~90 healthy) · **age** (ms since last telemetry;
+(protocol frames received, ~30 healthy — telemetry only; higher only if
+WAVEFORM streaming is re-enabled) · **age** (ms since last telemetry;
 climbing = stream stalled, not the renderer) · **res** (viewport × dpr, e.g.
 `1920×1080@1`). Tap it or press **D** to hide/show; it's on by default, so add
 `?diag=0` to disable it for a production kiosk. The flat skin is the only design.
@@ -85,10 +96,11 @@ the first valid device frame arrives. Then it enters **live mode** (`.is-live`):
 - CKP / CMP1 / CMP2 are a **parametric standing display**, not a plot of the
   WAVEFORM edge-lists: three clean square waves (distinct per-lane frequency/
   duty/amplitude) whose frequency tracks RPM, redrawn only when the RPM bucket
-  changes — i.e. it doesn't animate continuously. WAVEFORM frames still arrive
-  over the wire (protocol unchanged) but are decoded minimally and not plotted
-  (`ECU.feedWaveform` is a no-op). CAN HI/LO stay decorative, standing waves
-  with a slow CSS scroll (no CAN channel in protocol v1).
+  changes — i.e. it doesn't animate continuously. WAVEFORM frames are **no
+  longer streamed by default** (firmware `s_wave_stream`, sim `--waveforms`;
+  wire format unchanged) — if any do arrive, `protocol.js` discards them before
+  the CRC pass and `ECU.feedWaveform` is a no-op. CAN HI/LO stay decorative,
+  standing waves with a slow stepped CSS scroll (no CAN channel in protocol v1).
 
 ## Signal map (protocol v1)
 
@@ -132,13 +144,15 @@ keep them or the dashboard visibly janks:
   version cost the most FPS of anything on the page; removing continuous
   redraw, not just cheapening it, is what fixed the weak-TV framerate).
 - **Needles rotate as element transforms** (`#rpm-needle`, `.mg-needle-rot`
-  overlay SVGs) — compositor-only; rotating a group *inside* an SVG repaints
-  the whole dial per frame.
+  wrapper divs carry the value rotation; the demo wobble animates the `<svg>`
+  *element* inside them) — compositor-only; rotating a group *inside* an SVG
+  repaints the whole dial per frame (the old demo wobble did exactly that).
 - **No blanket `will-change`** — two dozen permanently promoted layers exhaust
   TV GPU memory; elements self-promote while actually animating.
 - **Continuous animations use `steps()` timing** (sparks + sprays step-end
-  opacity pops, CAN 16/cycle scroll) — a smooth 60 Hz animation damages the
-  screen every frame on a software renderer; stepped reads the same, costs far
+  opacity pops, CAN `steps(96)` scroll ≈ 8 blends/s instead of 60) — a smooth
+  60 Hz animation damages the screen every frame on a software renderer;
+  stepped reads the same, costs far
   less. Fans are the exception: `setFanRunning()` toggles `fan-run`/`fan-coast`
   classes so a CSS `animation`(ease-in spin-up + linear steady spin) and a CSS
   `transition` (coast-down) drive them — no per-frame JS either way.
@@ -156,10 +170,15 @@ keep them or the dashboard visibly janks:
 - **Watchdog reconnect** (`live.js`): TV Wi-Fi power save can kill the TCP
   stream silently; stale telemetry (> 2.5 s) forces a reconnect instead of a
   frozen dashboard.
-- **Waveform frames are decoded minimally, not plotted** (`protocol.js`
-  `decodeWaveform` only reads the mode byte) — the scope is parametric now, so
-  fully decoding thousands of edges/s into typed arrays was pure GC churn with
-  no visual payoff.
+- **Waveform frames are not streamed by default** (firmware `s_wave_stream` =
+  false, sim `--waveforms` opt-in) — the scope is parametric, so shipping and
+  parsing ~60 edge-list frames/s was pure overhead. If one does arrive,
+  `protocol.js` returns after reading the mode byte, **before** the CRC pass
+  (a bitwise CRC over ~1 KB per frame was the biggest per-message CPU cost on
+  weak TVs; harmless to skip since nothing is plotted from the payload).
+- **Telemetry DOM applies are rAF-paced** (`live.js`): at most one apply per
+  painted frame with an 80 ms floor — a fixed `setInterval` kept writing DOM
+  a slow TV could never paint.
 - **No `aspect-ratio` / `min()`** — unsupported on TV browsers (Chromium ≤ 87);
   the RPM bezel is a fixed 384×384 px in the 1920×1080 canvas.
 - **Stage fitting**: a `transform: scale()` on the stage makes a software

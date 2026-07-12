@@ -246,12 +246,15 @@ row, big RPM dial, six 0–5 V mini gauges (CTS/MAF/MAP/IAT/5V/IGF), and 8-cell
 COIL/INJ/GDI banks with spark/spray bursts. One unified "white navy" background
 (`--navy` #33516f), flat colors + 1px borders only — **no gradients, shadows, glows or
 filters anywhere** (do not reintroduce). `app.js` is the view (global `ECU` API);
-`js/live.js` maps decoded protocol frames onto it (coalesced to ~12.5 Hz, latched bits
-OR-ed, stale-stream watchdog forces reconnect). The page free-runs as a demo until the
-first valid frame, then `.is-live` gates every animation behind real telemetry. The CKP/
-CMP scope is a **parametric standing display** (three square waves whose frequency
-tracks RPM, redrawn only when the RPM bucket changes — not a continuous loop and not a
-plot of the WAVEFORM edge-lists, which are still received but decoded minimally).
+`js/live.js` maps decoded protocol frames onto it (coalesced and rAF-paced — at most
+one DOM apply per painted frame with an 80 ms floor ≈ 12.5 Hz on healthy displays;
+latched bits OR-ed, stale-stream watchdog forces reconnect). The page free-runs as a
+demo until the first valid frame, then `.is-live` gates every animation behind real
+telemetry. The CKP/CMP scope is a **parametric standing display** (three square waves
+whose frequency tracks RPM, redrawn only when the RPM bucket changes — not a continuous
+loop and not a plot of the WAVEFORM edge-lists, which the firmware **no longer streams
+by default** as of 2026-07-12 — `s_wave_stream` in main.c, sim `--waveforms`; wire
+format unchanged, and `protocol.js` discards any that arrive before its CRC pass).
 `js/diag.js` shows an FPS/WS/age/res corner meter (tap or key D hides; `?diag=0`
 disables it). CTS/IGF/CURRENT have **no protocol v1
 field** — zeroed in live mode; HIP+PFC-OFF both show the Fuel Pump bit; banks show 8
@@ -259,11 +262,15 @@ channels (6-cyl sim fires 1–6). Signal map in `web/README.md`. `tools/sim_serv
 (stdlib Python) serves `web/` + speaks the full binary protocol with the same generators
 as the firmware sim — dashboard development needs no hardware:
 `python3 tools/sim_server.py` → `:8090`.
-**Universal old+new TV target (2026-07-11):** all `web/*.js` is **ES5 classic scripts**
-(no `type="module"`, no `const`/`let`/`class`/arrows/template literals) and the layout
-uses **flexbox + margins, not CSS Grid** — the client's older TV (~Chromium 49–60) ran
-modules as no-ops (stuck in demo mode, no WebSocket ever opened) and scrambled Grid
-layouts. See `web/README.md` "Old-TV compatibility" before adding modern JS/CSS syntax.
+**Universal old+new TV target (2026-07-11, extended 2026-07-12):** all `web/*.js` is
+**ES5 classic scripts** (no `type="module"`, no `const`/`let`/`class`/arrows/template
+literals) and the layout uses **flexbox + margins, not CSS Grid** — the client's older
+TV (~Chromium 49–60) ran modules as no-ops (stuck in demo mode, no WebSocket ever
+opened) and scrambled Grid layouts. The 2026-07-12 pass also purged **flex `gap`**
+(needs Chromium 84+ — every gutter silently collapsed on the old TV), **`inset:`**
+(needs 87+ — un-pinned the outer `.frame`), **`space-evenly`** (needs 60+) and
+**`NodeList.forEach`** (needs 51+).
+See `web/README.md` "Old-TV compatibility" before adding modern JS/CSS syntax.
 **TV/kiosk perf rules are load-bearing** (the display browsers render single-threaded
 in software): no per-frame `:root` CSS-var writes, stepped `steps()` animation timing,
 animated sprites on cached layers (`will-change` + `contain: paint`), a **static/event-
@@ -277,8 +284,10 @@ enumeration + `httpd_ws_send_frame_async`) and both tasks are implemented. `acq_
 the web transfer curves, status lines, IAC phase — into the length-1 snapshot; `net_task`
 (core 0) integrates one crank-angle accumulator from RPM to derive the latched
 coil/injector firing bits **and** the CKP 60-2 / CMP1 / CMP2 waveform edge-lists (so a
-coil flash lines up with the crank trace), then broadcasts TELEMETRY (~30 Hz) + WAVEFORM
-frames. **Verified on the device**: WS handshake `101`, ~69 TELEMETRY + ~132 WAVEFORM
+coil flash lines up with the crank trace), then broadcasts TELEMETRY (~30 Hz); WAVEFORM
+edge-list streaming is implemented but **default-off** since 2026-07-12 (`s_wave_stream`
+— nothing plots it; re-enable via SUBSCRIBE when that handler lands). **Verified on the
+device** (before the default-off): WS handshake `101`, ~69 TELEMETRY + ~132 WAVEFORM
 frames in 2.5 s, telemetry decodes clean (idle rpm ~810, ecu_v ~13.8 V, coils cycling in
 1-5-3-6-2-4 order), rpm breathing. This is the hardware-free simulation mode (CLAUDE.md
 §1); the sim generators are the drop-in seam for real drivers.
@@ -288,7 +297,8 @@ tablets), so `ws_broadcast` sends only when the socket is writable (zero-timeout
 continuous back-pressure; WS sockets get `SO_SNDTIMEO` 100 ms + `TCP_NODELAY` at
 handshake. Never let one client's send block `net_task` — it froze every viewer.
 Browser-side, `live.js` coalesces bursts (latest frame wins, firing bits OR-latched)
-and applies to the DOM at ~12.5 Hz.
+and applies to the DOM rAF-paced (80 ms floor — ≤12.5 Hz, and never faster than the
+display actually paints).
 
 **Still open (not a scaffold gap — real work):** the *real* acquisition drivers (ADS1115
 precision analog, MCP23017 status, 74HC165 coil/injector activity, CKP/CMP capture via

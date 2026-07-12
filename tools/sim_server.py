@@ -3,7 +3,8 @@
 
 Serves web/ over HTTP and speaks the binary WebSocket protocol on /ws
 (docs/PROTOCOL.md: envelope + CRC16-CCITT-FALSE, TELEMETRY 0x01 at 30 Hz,
-WAVEFORM 0x02 edge-lists), generating the same signals as the firmware
+WAVEFORM 0x02 edge-lists — off by default like the device, see --waveforms),
+generating the same signals as the firmware
 simulation in main.c — RPM breathing, mV analog values, status bits, walking
 IAC phase, 1-5-3-6-2-4 firing order and the CKP 60-2 / CMP crank-synced edges.
 
@@ -28,6 +29,11 @@ from pathlib import Path
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+# Mirrors the firmware default (s_wave_stream in main.c): WAVEFORM frames are
+# not streamed — the dashboard's scope is parametric and never plots them.
+# Run with --waveforms to exercise the browser's cheap-discard path.
+SEND_WAVEFORMS = False
 
 # ---- protocol framing (docs/PROTOCOL.md §1) --------------------------------
 
@@ -189,21 +195,26 @@ class Handler(SimpleHTTPRequestHandler):
 
         sim, seq = Sim(), 0
         try:
-            while True:  # 30 Hz: one TELEMETRY + one WAVEFORM per channel
+            while True:  # 30 Hz: one TELEMETRY (+ WAVEFORM per channel if enabled)
                 tele, waves = sim.tick()
                 frames = [make_frame(0x01, seq, telemetry_payload(**tele))]; seq += 1
-                for ch, edges in waves.items():
-                    if edges:
-                        frames.append(make_frame(0x02, seq, waveform_payload(ch, edges[0][0], edges))); seq += 1
+                if SEND_WAVEFORMS:
+                    for ch, edges in waves.items():
+                        if edges:
+                            frames.append(make_frame(0x02, seq, waveform_payload(ch, edges[0][0], edges))); seq += 1
                 self.connection.sendall(b"".join(ws_encode_binary(f) for f in frames))
                 time.sleep(1 / 30)
         except (BrokenPipeError, ConnectionResetError, OSError):
             print(f"[ws] client {self.client_address} disconnected")
 
 def main():
+    global SEND_WAVEFORMS
     ap = argparse.ArgumentParser(description="ECU_TESTER dashboard sim server")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8090)))
+    ap.add_argument("--waveforms", action="store_true",
+                    help="also stream WAVEFORM edge frames (device default is off)")
     args = ap.parse_args()
+    SEND_WAVEFORMS = args.waveforms
     print(f"serving {WEB_ROOT} + protocol sim on http://localhost:{args.port}")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 

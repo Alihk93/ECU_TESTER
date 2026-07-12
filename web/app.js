@@ -87,8 +87,8 @@
     var angle = Math.round(rpmAngle(rpm) * 10) / 10; // 0.1° steps: skip no-op redraws
     if (angle !== rpmDrawn.angle) {
       rpmDrawn.angle = angle;
-      // CSS transform (not the SVG attribute) so the transition in style.css
-      // glides the needle between the throttled live updates
+      // element-level CSS rotation on the wrapper div — composited; the
+      // needle steps at the coalesced data rate (no glide transition)
       $('rpm-needle').style.transform = 'rotate(' + angle + 'deg)';
     }
     var text = commafy(Math.round(state.rpm));
@@ -194,8 +194,9 @@
       var el = document.createElement('div');
       el.className = 'mini-gauge';
       el.dataset.sensor = name;
-      // needle in its own overlay svg, baked pointing at 0 V: value updates
-      // rotate the ELEMENT (compositor-only) instead of rewriting the polygon
+      // needle baked pointing at 0 V: the wrapper DIV takes the value rotation
+      // and the inner svg ELEMENT takes the demo wobble — both compositor-only
+      // (a transform inside the svg would repaint the gauge per frame on TVs)
       el.innerHTML =
         '<div class="mg-inner">' +
           '<div class="mg-name">' + name + '</div>' +
@@ -203,9 +204,11 @@
           '<svg viewBox="0 0 140 106">' +
             '<path d="' + ticks + '" stroke="#9298a0" stroke-width="1.2" stroke-linecap="round"></path>' +
           '</svg>' +
-          '<svg class="mg-needle-rot" viewBox="0 0 140 106" style="transform: rotate(' + mgDeg(val).toFixed(1) + 'deg)">' +
-            '<polygon class="mg-needle" points="' + mgNeedlePoints(0) + '" fill="url(#mgNeedle)" style="animation-delay:' + (-i * 0.55).toFixed(2) + 's"></polygon>' +
-          '</svg>' +
+          '<div class="mg-needle-rot" style="transform: rotate(' + mgDeg(val).toFixed(1) + 'deg)">' +
+            '<svg viewBox="0 0 140 106" style="animation-delay:' + (-i * 0.55).toFixed(2) + 's">' +
+              '<polygon class="mg-needle" points="' + mgNeedlePoints(0) + '" fill="url(#mgNeedle)"></polygon>' +
+            '</svg>' +
+          '</div>' +
         '</div>';
       host.appendChild(el);
       sensorEls[name] = {
@@ -454,9 +457,11 @@
   function setStatusCells(map) {
     if (!statusCellEls) {
       statusCellEls = {};
-      document.querySelectorAll('.status-cell[data-cell]').forEach(function (el) {
-        statusCellEls[el.dataset.cell] = el;
-      });
+      // plain loop: NodeList.forEach needs Chromium 51+ (old TV browsers)
+      var cells = document.querySelectorAll('.status-cell[data-cell]');
+      for (var i = 0; i < cells.length; i++) {
+        statusCellEls[cells[i].dataset.cell] = cells[i];
+      }
     }
     for (var key in map) {
       var el = statusCellEls[key];
@@ -595,6 +600,8 @@
   updateIac();
   updateCursor();
   // demo: fans spin (clockwise, eased) until live telemetry gates them
-  document.querySelectorAll('.status-cell--fan').forEach(function (c) { c.classList.add('fan-run'); });
+  // (plain loop: NodeList.forEach needs Chromium 51+ — old TV browsers)
+  var fanCells = document.querySelectorAll('.status-cell--fan');
+  for (var fi = 0; fi < fanCells.length; fi++) fanCells[fi].classList.add('fan-run');
   fitStage();
 })();

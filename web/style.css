@@ -110,15 +110,20 @@ html, body {
   overflow: hidden;
 }
 
-/* Outer frame — flat bezel line on the unified background */
+/* Outer frame — flat bezel line on the unified background.
+   No `inset:` (needs Chromium 87+) and no flex `gap` (needs 84+) anywhere in
+   this file — the old bench TV (~Chromium 49–60) ignores both silently, which
+   collapsed every gutter and unpinned this frame. Gutters are child margins. */
 .frame {
   position: absolute;
-  inset: 10px;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
   border-radius: 12px;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   background: var(--navy);
   border: 2px solid #567aa3;
 }
@@ -131,18 +136,18 @@ html, body {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 20px;
 }
+.topbar > * + * { margin-left: 20px; }
 
 .readout {
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 16px 22px;
   border-radius: 9px;
   border: 1px solid var(--line);
 }
-.readout--device { gap: 13px; }
+.readout > * + * { margin-left: 12px; }
+.readout--device > * + * { margin-left: 13px; }
 
 .readout-label {
   color: #c7d0d8;
@@ -207,8 +212,8 @@ html, body {
 .mid {
   flex: 1;
   min-height: 0;
+  margin-top: 12px;
   display: flex;
-  gap: 14px;
 }
 
 .left-col {
@@ -216,7 +221,6 @@ html, body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   min-height: 0;
 }
 
@@ -240,7 +244,6 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   padding: 8px;
   overflow: hidden;
   border-radius: 10px;
@@ -288,9 +291,10 @@ html, body {
 .iac-leds {
   flex: none;
   display: flex;
-  justify-content: space-evenly;
+  justify-content: space-around; /* not space-evenly — needs Chromium 60+ */
   align-items: center;
   width: 100%;
+  margin-top: 4px;
   padding: 2px 6px 0;
 }
 .iac-led {
@@ -328,13 +332,14 @@ html, body {
 .scope {
   flex: 1;
   min-height: 0;
+  margin-top: 12px;
   border-radius: 14px;
   padding: 14px 16px;
   border: 1px solid rgba(200, 150, 80, 0.32);
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
+.scope > * + * { margin-top: 8px; }
 
 .scope-plot {
   position: relative;
@@ -351,7 +356,6 @@ html, body {
   /* label column + one shared canvas (see app.js scope section) */
   flex-direction: row;
   align-items: stretch;
-  gap: 10px;
 }
 .scope-plot--can {
   flex: 1;
@@ -373,7 +377,6 @@ html, body {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
   min-height: 0;
 }
 .trace-label {
@@ -397,6 +400,7 @@ html, body {
 #scope-canvas {
   flex: 1;
   min-width: 0;
+  margin-left: 10px;
   display: block;
 }
 
@@ -406,6 +410,7 @@ html, body {
 .trace-clip {
   flex: 1;
   height: 34px;
+  margin-left: 10px;
   position: relative;
   overflow: hidden;
 }
@@ -418,7 +423,10 @@ html, body {
   background-repeat: repeat-x;
   background-size: 50% 100%;
   will-change: transform;
-  animation: can-scroll 12s linear infinite; /* slow + smooth (linear, not stepped) */
+  /* stepped, not linear: a smooth 60 Hz transform keeps the software
+     compositor re-blending this strip every frame; steps(96) reads the same
+     slow crawl at ~8 blends/s (≈87% fewer) */
+  animation: can-scroll 12s steps(96) infinite;
 }
 @keyframes can-scroll {
   from { transform: translateX(0); }
@@ -428,8 +436,8 @@ html, body {
 .scope-header {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
+.scope-header > * + * { margin-left: 10px; }
 .scope-header-title {
   color: #e9edf1;
   font-weight: 700;
@@ -450,6 +458,7 @@ html, body {
 .gauges-panel {
   flex: 1;
   min-width: 0;
+  margin-left: 14px;
   position: relative;
   border-radius: 14px;
   padding: 14px 16px 16px;
@@ -462,7 +471,6 @@ html, body {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 14px;
 }
 
 .gauges-left {
@@ -470,7 +478,6 @@ html, body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   min-height: 0;
 }
 
@@ -488,7 +495,6 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
 }
 .indicator-label {
   font-weight: 700;
@@ -498,6 +504,7 @@ html, body {
 .indicator-circle {
   width: 56px;
   height: 56px;
+  margin-top: 6px;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -523,6 +530,7 @@ html, body {
 .rpm-wrap {
   flex: 1;
   min-height: 0;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -547,20 +555,26 @@ html, body {
 }
 .rpm-face svg {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
 }
 #rpm-needle {
-  /* an <svg> element (not a group inside the dial): its CSS rotation is
-     composited; needles step at the data rate (no glide transition — that
-     repaints per frame on non-composited renderers) */
+  /* wrapper DIV carrying the value rotation; the wobble animates the <svg>
+     ELEMENT inside it. Both are element-level transforms (composited) —
+     nothing ever rotates inside an svg (that repaints the dial per frame on
+     TV renderers). Needles step at the data rate (no glide transition). */
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   transform-origin: 50% 50%;
   will-change: transform;
 }
 .rpm-needle-wobble {
-  transform-origin: 200px 200px;
-  transform-box: view-box;
+  transform-origin: 50% 50%;
   animation: rpm-needle-wobble 1.6s ease-in-out infinite; /* demo only */
 }
 .rpm-center {
@@ -598,6 +612,7 @@ html, body {
 .mini-gauges {
   flex: 1;
   min-width: 0;
+  margin-left: 14px;
   display: flex;
   flex-wrap: wrap;
   align-content: center;
@@ -653,24 +668,23 @@ html, body {
   letter-spacing: .01em;
   pointer-events: none;
 }
-.mg-needle {
-  transform-origin: 70px 60px;
-  transform-box: view-box;
-  animation: mini-needle-wobble 3.2s ease-in-out infinite; /* demo only */
-}
-/* overlay svg carrying the value rotation (composited element transform);
-   pivot = needle hub (70,60) in the 140×106 viewBox.
-   Selector must out-rank `.mg-inner svg` (position: relative) or the needle
-   falls into flow below the dial and the tile clips it. */
-.mg-inner svg.mg-needle-rot {
+/* overlay DIV carrying the value rotation (composited element transform);
+   pivot = needle hub (70,60) in the 140×106 viewBox => 50% 56.6%. The demo
+   wobble animates the <svg> ELEMENT inside it (also composited) — never the
+   polygon: a transform inside an svg repaints the whole gauge per frame. */
+.mg-needle-rot {
   position: absolute;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
-  overflow: visible;
   transform-origin: 50% 56.6%;
   will-change: transform;
+}
+.mg-needle-rot svg {
+  height: 100%;
+  transform-origin: 50% 56.6%;
+  animation: mini-needle-wobble 3.2s ease-in-out infinite; /* demo only */
 }
 
 /* ==========================================================================
@@ -679,9 +693,10 @@ html, body {
 .banks {
   height: 330px;
   flex: none;
+  margin-top: 12px;
   display: flex;
-  gap: 14px;
 }
+.bank + .bank { margin-left: 14px; }
 
 .bank {
   flex: 1;
@@ -736,8 +751,9 @@ html, body {
   position: relative;
   contain: layout;
 }
-/* .anim-layer: no will-change — 24 permanently promoted layers exhaust TV GPU
-   memory; an element animates onto its own layer only while active */
+/* .anim-layer sprites get `will-change: opacity` in their holders below —
+   deliberate (web/README.md): each spark/spray owns a small cached layer so
+   the static page rasterizes once and per frame only animated bitmaps blend */
 
 /* Spark effect (coils) */
 .spark-holder {
@@ -833,7 +849,7 @@ html, body {
 }
 
 /* real data replaces the demo needle wobble */
-.stage.is-live .mg-needle,
+.stage.is-live .mg-needle-rot svg,
 .stage.is-live .rpm-needle-wobble {
   animation: none;
 }

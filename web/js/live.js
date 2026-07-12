@@ -62,11 +62,19 @@
     }
   }
 
-  setInterval(function () {
-    if (!pending) return;
-    applyTelemetry(pending);
-    pending = null;
-  }, 80);
+  // rAF-paced (web/README.md rule): rAF self-throttles to what the device can
+  // paint, so a TV managing 9 FPS gets 9 DOM applies/s instead of a fixed 12.5
+  // it can't paint. 80 ms floor keeps healthy displays at ~12.5 Hz.
+  var lastApply = 0;
+  function applyTick(t) {
+    if (pending && t - lastApply >= 80) {
+      lastApply = t;
+      applyTelemetry(pending);
+      pending = null;
+    }
+    requestAnimationFrame(applyTick);
+  }
+  requestAnimationFrame(applyTick);
 
   // Served from the device, location.host is 10.10.10.10. For desktop preview
   // against real hardware, override with ?device=10.10.10.10.

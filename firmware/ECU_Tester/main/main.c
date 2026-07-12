@@ -359,6 +359,15 @@ static void acq_task(void *arg)
  *  coil/injector firing events — so the flashing coil matches the CKP trace.
  * ===========================================================================*/
 #define WAVE_MAX_EDGES   256
+
+/* WAVEFORM edge-list streaming — DEFAULT OFF (2026-07-12 FPS pass). The
+ * dashboard's scope is a parametric standing display and never plots the edge
+ * lists, so streaming them was pure overhead: ~60 extra WS frames/s of Wi-Fi
+ * airtime and, worse, per-message parse work on the single-threaded TV
+ * browsers (the FPS bottleneck). Wire format unchanged (docs/PROTOCOL.md §4);
+ * flip via SUBSCRIBE (0x81) once that handler lands. */
+static bool s_wave_stream = false;
+
 static const uint8_t s_fire_order[6] = { 0, 4, 2, 5, 1, 3 };  /* 1-5-3-6-2-4 */
 
 static ecu_wave_edge_t s_ckp[WAVE_MAX_EDGES], s_cmp1[32], s_cmp2[32];
@@ -417,7 +426,7 @@ static void net_task(void *arg)
         double   a1 = crank_deg + dps_us * dt_us;
 
         uint16_t nckp = 0, ncmp1 = 0, ncmp2 = 0;
-        if (dps_us > 0) {
+        if (s_wave_stream && dps_us > 0) {
             /* CKP 60-2: high in the first half of each present tooth (6°/tooth,
                58 present then 2 missing). Emit only on level change. */
             double b = ceil((a0 + 1e-6) / 3.0) * 3.0;      /* half-tooth grid */
@@ -441,6 +450,8 @@ static void net_task(void *arg)
                 if (l1 != s_cmp1_lvl) { s_cmp1[ncmp1].edge_t_us = t; s_cmp1[ncmp1].level = l1; ncmp1++; s_cmp1_lvl = l1; }
                 if (l2 != s_cmp2_lvl) { s_cmp2[ncmp2].edge_t_us = t; s_cmp2[ncmp2].level = l2; ncmp2++; s_cmp2_lvl = l2; }
             }
+        }
+        if (dps_us > 0) {
             /* Firing events: one cylinder every 120° crank, in firing order.
                Latched into the telemetry bits "since last frame". */
             long f1 = (long)floor(a1 / 120.0);
@@ -466,10 +477,12 @@ static void net_task(void *arg)
         memcpy(frame + body, &crc, sizeof(crc));   /* little-endian native */
         ws_broadcast(frame, body + sizeof(crc));
 
-        /* --- WAVEFORM (CKP / CMP1 / CMP2) --------------------------------- */
-        wave_broadcast(WAVE_CH_CKP,  s_ckp,  nckp,  &seq);
-        wave_broadcast(WAVE_CH_CMP1, s_cmp1, ncmp1, &seq);
-        wave_broadcast(WAVE_CH_CMP2, s_cmp2, ncmp2, &seq);
+        /* --- WAVEFORM (CKP / CMP1 / CMP2) — off by default, see s_wave_stream */
+        if (s_wave_stream) {
+            wave_broadcast(WAVE_CH_CKP,  s_ckp,  nckp,  &seq);
+            wave_broadcast(WAVE_CH_CMP1, s_cmp1, ncmp1, &seq);
+            wave_broadcast(WAVE_CH_CMP2, s_cmp2, ncmp2, &seq);
+        }
     }
 }
 

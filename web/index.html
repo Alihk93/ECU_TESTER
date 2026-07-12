@@ -53,7 +53,7 @@
 
       <!-- CURRENT -->
       <div class="readout">
-        <span class="readout-label">CURRENT</span>
+        <span class="readout-label">CURRENT:</span>
         <div class="seg seg--current">
           <span class="seg-value" id="current">0.12</span>
         </div>
@@ -116,8 +116,9 @@
             <span class="scope-header-dot"></span>
           </div>
           <!-- CAN plot (decorative — no CAN channel in protocol v1). The scroll
-               animates the <svg> element itself so it stays GPU-composited;
-               transforms inside an SVG repaint per frame on TV browsers. -->
+               is a stepped (steps()) transform of a background-image div:
+               composited, and it damages the screen a few times a second
+               instead of every frame (see .can-scroll in style.css). -->
           <div class="scope-plot scope-plot--can">
             <div class="scope-cursor"></div>
             <div class="trace-row">
@@ -161,14 +162,16 @@
                       <text x="296.2" y="296.2">8</text>
                     </g>
                   </svg>
-                  <!-- needle in its own svg: rotating the element (not a group
-                       inside the dial svg) stays on the compositor -->
-                  <svg id="rpm-needle" viewBox="0 0 400 400">
-                    <g class="rpm-needle-wobble">
+                  <!-- needle: the wrapper div carries the value rotation, the
+                       svg element carries the demo wobble — both element-level
+                       transforms (compositor-only); nothing rotates INSIDE an
+                       svg (that repaints the dial per frame on TV renderers) -->
+                  <div id="rpm-needle">
+                    <svg class="rpm-needle-wobble" viewBox="0 0 400 400">
                       <polygon points="200,58 206,200 194,200" fill="#ff5a1e"></polygon>
                       <line x1="200" y1="200" x2="200" y2="252" stroke="#ff5a1e" stroke-width="6" stroke-linecap="round"></line>
-                    </g>
-                  </svg>
+                    </svg>
+                  </div>
                   <svg viewBox="0 0 400 400" aria-hidden="true">
                     <circle cx="200" cy="200" r="16" fill="#15181c" stroke="#ff5a1e" stroke-width="2.5"></circle>
                     <circle cx="200" cy="200" r="6" fill="#ff5a1e"></circle>

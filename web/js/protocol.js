@@ -95,13 +95,21 @@
    * version, length, CRC. Returns null on any failure (caller drops the frame).
    */
   function decodeFrame(arrayBuffer) {
-    var dv = new DataView(arrayBuffer);
     var bytes = new Uint8Array(arrayBuffer);
     if (bytes.length < 10) return null;
     if (bytes[0] !== PROTO.MAGIC0 || bytes[1] !== PROTO.MAGIC1) return null;
     if (bytes[2] !== PROTO.VERSION) return null;
 
     var msgType = bytes[3];
+    // WAVEFORM frames aren't plotted (the scope is parametric) — bail out
+    // BEFORE the CRC pass: a bitwise CRC over a ~1 KB edge list per frame was
+    // the biggest per-message CPU cost on weak TV browsers. Nothing is read
+    // from the payload but the mode byte, so a corrupt frame is harmless.
+    if (msgType === PROTO.TYPE.WAVEFORM) {
+      return { type: "waveform", seq: bytes[4] | (bytes[5] << 8), data: { mode: bytes[9] } };
+    }
+
+    var dv = new DataView(arrayBuffer);
     var seq = dv.getUint16(4, true);
     var payloadLen = dv.getUint16(6, true);
     var total = 8 + payloadLen + 2;
@@ -114,10 +122,6 @@
     switch (msgType) {
       case PROTO.TYPE.TELEMETRY:
         return { type: "telemetry", seq: seq, data: decodeTelemetry(dv, p) };
-      case PROTO.TYPE.WAVEFORM:
-        // scope is parametric now — skip decoding the (unused) edge list to avoid
-        // per-frame typed-array allocation + GC churn on weak TV browsers
-        return { type: "waveform", seq: seq, data: { mode: bytes[p + 1] } };
       case PROTO.TYPE.HELLO:
         return { type: "hello", seq: seq, raw: bytes.subarray(p, p + payloadLen) };
       case PROTO.TYPE.ACK:

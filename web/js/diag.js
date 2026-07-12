@@ -3,7 +3,8 @@
    never reproduces a weak TV/tablet renderer) without devtools.
 
    FPS  = actual redraw rate (60 ≈ butter, <30 = janky)
-   WS/s = protocol frames received per second (~90 healthy)
+   WS/s = protocol frames received per second (~30 healthy — telemetry only;
+          higher only if WAVEFORM streaming is re-enabled)
    age  = ms since the last telemetry frame (climbing = the stream stalled,
           not the renderer)
 
