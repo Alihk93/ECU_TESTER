@@ -151,7 +151,8 @@ class Dashboard(private val root: View) {
 
             val label = TextView(root.context)
             label.text = c.name
-            label.textSize = 15f
+            label.textSize = 13f
+            label.maxLines = 1
             label.setTypeface(label.typeface, Typeface.BOLD)
             label.setTextColor(if (c.green) color("#55e06a") else color("#ff4a3d"))
             col.addView(label)
