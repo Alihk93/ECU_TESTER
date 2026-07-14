@@ -41,6 +41,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var meter: TextView
     private lateinit var socket: EcuSocket
     private lateinit var mapper: LiveMapper
+    private lateinit var demo: DemoDriver
+    private var liveStarted = false
     private val ui = Handler(Looper.getMainLooper())
 
     private var frameCount = 0
@@ -74,7 +76,15 @@ class MainActivity : AppCompatActivity() {
         val wsUrl = resolveWsUrl()
         hostLabel = wsUrl.removePrefix("ws://").removeSuffix("/ws")
 
-        mapper = LiveMapper { t -> dashboard.applyTelemetry(t) }
+        // Free-run a demo until the first real frame (parity with the web dashboard),
+        // so the display looks alive when the ESP32 is off/booting.
+        demo = DemoDriver { t -> dashboard.applyTelemetry(t) }
+        demo.start()
+
+        mapper = LiveMapper { t ->
+            if (!liveStarted) { liveStarted = true; demo.stop() }
+            dashboard.applyTelemetry(t)
+        }
         socket = EcuSocket(
             url = wsUrl,
             onFrame = { mapper.onFrame(it) },
@@ -119,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         setupKiosk()
     }
 
-    override fun onDestroy() { socket.close(); super.onDestroy() }
+    override fun onDestroy() { demo.stop(); socket.close(); super.onDestroy() }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
