@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "b5a77d7 · feat(android): kiosk / autostart (boot launch, crash-relaunch, lock-task)",
-  "lastCommitDate": "2026-07-14T14:07:32+03:00",
+  "lastCommit": "75dfae6 · polish(android): dashboard layout adjustments (client feedback) + show-when-locked",
+  "lastCommitDate": "2026-07-14T14:55:32+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T11:07:32.615091256Z"
+  "lastSync": "2026-07-14T11:55:32.334755370Z"
 }
