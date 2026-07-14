@@ -79,22 +79,40 @@ class Dashboard(private val root: View) {
 
     /* ---------------- status grid ---------------- */
     private fun buildStatusGrid() {
+        val mp = LinearLayout.LayoutParams.MATCH_PARENT
         val grid = root.findViewById<LinearLayout>(R.id.status_grid)
-        data class Cfg(val key: String, val img: Int, val border: Int, val weight: Float, val badge: String?, val red: Boolean, val leds: Boolean)
+
+        // Both fans share ONE bordered box (client feedback): fanBox has the border,
+        // the two fan sub-cells inside are borderless.
+        val fanBox = LinearLayout(root.context)
+        fanBox.orientation = LinearLayout.HORIZONTAL
+        fanBox.setBackgroundResource(R.drawable.bd_fan)
+        fanBox.setPadding(8, 8, 8, 8)
+        grid.addView(fanBox, llp(0, mp, 2f))   // spans what the two fan cells did
+        for ((idx, key) in listOf("fan1", "fan2").withIndex()) {
+            val cell = FrameLayout(root.context)
+            fanBox.addView(cell, llp(0, mp, 1f))
+            val img = ImageView(root.context)
+            img.scaleType = ImageView.ScaleType.FIT_CENTER
+            img.setImageResource(R.drawable.fan)
+            cell.addView(img, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            cell.addView(makeBadge((idx + 1).toString()))
+            fans[key] = Fan(img)
+        }
+
+        // imo / hip / iac — separate bordered cells
+        data class Cfg(val key: String, val img: Int, val border: Int, val weight: Float, val red: Boolean, val leds: Boolean)
         val cfgs = listOf(
-            Cfg("fan1", R.drawable.fan, R.drawable.bd_fan, 1f, "1", false, false),
-            Cfg("fan2", R.drawable.fan, R.drawable.bd_fan, 1f, "2", false, false),
-            Cfg("imo", R.drawable.imo2, R.drawable.bd_red, 1f, null, true, false),
-            Cfg("hip", R.drawable.hip, R.drawable.bd_red, 1f, null, true, false),
-            Cfg("iac", R.drawable.iac, R.drawable.bd_iac, 2f, null, false, true),
+            Cfg("imo", R.drawable.imo2, R.drawable.bd_red, 1f, true, false),
+            Cfg("hip", R.drawable.hip, R.drawable.bd_red, 1f, true, false),
+            Cfg("iac", R.drawable.iac, R.drawable.bd_iac, 2f, false, true),
         )
-        for ((i, c) in cfgs.withIndex()) {
+        for (c in cfgs) {
             val box = FrameLayout(root.context)
             box.setBackgroundResource(c.border)
             box.setPadding(8, 8, 8, 8)
-            val lp = llp(0, LinearLayout.LayoutParams.MATCH_PARENT, c.weight)
-            if (i > 0) lp.marginStart = 12
-            grid.addView(box, lp)
+            grid.addView(box, llp(0, mp, c.weight).apply { marginStart = 12 })
 
             val img = ImageView(root.context)
             img.scaleType = ImageView.ScaleType.FIT_CENTER
@@ -102,8 +120,6 @@ class Dashboard(private val root: View) {
             box.addView(img, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
                 if (c.leds) bottomMargin = 26
             })
-
-            if (c.badge != null) box.addView(makeBadge(c.badge))
             statusCells[c.key] = StatusCell(box, img, c.red)
 
             if (c.leds) {
@@ -120,7 +136,6 @@ class Dashboard(private val root: View) {
                     iacLeds.add(led)
                 }
             }
-            if (c.key == "fan1" || c.key == "fan2") fans[c.key] = Fan(img)
         }
     }
 
@@ -351,11 +366,11 @@ class Dashboard(private val root: View) {
     }
 
     private fun setStatusCell(key: String, on: Boolean) {
-        val c = statusCells[key] ?: return
         if (key == "fan1" || key == "fan2") {
             fans[key]?.let { if (it.on != on) { it.on = on; ensureFanLoop() } }
             return
         }
+        val c = statusCells[key] ?: return
         // red cells (imo/hip): dim when inactive
         c.img.alpha = if (on) 1f else 0.4f
     }
