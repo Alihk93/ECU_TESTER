@@ -124,17 +124,19 @@ class Dashboard(private val root: View) {
         }
     }
 
+    // Plain white number in the top-left corner (no badge box).
     private fun makeBadge(text: String): TextView {
         val b = TextView(root.context)
         b.text = text
-        b.setBackgroundResource(R.drawable.bd_badge)
         b.setTextColor(color("#ffffff"))
-        b.textSize = 11f
+        b.textSize = 12f
         b.setTypeface(Typeface.create("sans-serif", Typeface.BOLD)) // crisp digit, not Saira
         b.includeFontPadding = false
-        b.gravity = Gravity.CENTER
         b.setPadding(0, 0, 0, 0)
-        b.layoutParams = FrameLayout.LayoutParams(17, 17, Gravity.TOP or Gravity.START)
+        b.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.START
+        ).apply { leftMargin = 5; topMargin = 3 }
         return b
     }
 
