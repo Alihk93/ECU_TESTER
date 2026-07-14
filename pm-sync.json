@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "ccbf6cb · polish(android): thin cell numbers, red bolt coil spark, bigger RPM reading",
-  "lastCommitDate": "2026-07-14T16:07:44+03:00",
+  "lastCommit": "2468b27 · polish(android): lower RPM reading, center sprays on nozzles, drop gauge/indicator outlines",
+  "lastCommitDate": "2026-07-14T16:35:31+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T13:07:44.198694300Z"
+  "lastSync": "2026-07-14T13:35:31.239300302Z"
 }
