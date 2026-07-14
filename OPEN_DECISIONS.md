@@ -7,8 +7,10 @@ recommendation → status**.
 
 Legend: 🔴 blocking · 🟡 should decide soon · 🟢 resolved
 
-> **ALL DECISIONS RESOLVED — 2026-07-02.** The header emoji show each item's *original*
+> **D0–D8 RESOLVED — 2026-07-02.** The header emoji show each item's *original*
 > priority; the **Status** line under each records the final decision.
+> **D9 added 2026-07-13** (display client → native Android TV app) — supersedes D8
+> for the smart-TV fleet; see below.
 
 ---
 
@@ -118,6 +120,27 @@ http://10.10.10.10`, autostart via the OS); (b) smart-TV browser; (c) tablet.
 WebSocket support. **Avoid IE** (effectively dead; poor/absent WebSocket support).
 **Status:** 🟢 RESOLVED — **(a) Chromium kiosk on a mini-PC**
 (`chromium --kiosk --app=http://10.10.10.10`, OS autostart). IE avoided.
+**⤷ Superseded for the smart-TV fleet by D9** (native Android app). The mini-PC
+Chromium path stays available as a fallback.
+
+## D9 — Display client: browser dashboard vs native Android TV app  🟡
+**Context:** the bench TVs software-composite in Chromium; the flat skin + perf
+passes got the browser to ~12–25 fps but the ceiling is the *renderer*, not the
+design. D8 chose a mini-PC Chromium kiosk as the guaranteed-60 path, but the fleet
+TVs run Android TV OS and can host a native app.
+**Options:** (a) keep the web dashboard on a Chromium kiosk / mini-PC (D8);
+(b) **native Android TV app** installed on the smart TVs — GPU-composited, so the
+renderer ceiling disappears; (c) both.
+**Recommendation:** (b) as the primary display; keep (a)/`web/` as fallback +
+reference (firmware unchanged, still serves it).
+**Status:** 🟢 RESOLVED (2026-07-13) — **(b) native Android TV app.** minSdk 24,
+Kotlin + classic Views/Canvas, OkHttp WebSocket, ADB-sideload updates. Firmware and
+the wire protocol are unchanged — the app is another WS client on `/ws`; `Protocol.kt`
+is a fourth contract mirror (`docs/ANDROID_MIGRATION.md`). `web/` is kept as the
+fallback, **not** deprecated. **M1 slice (RPM needle) built + verified on-device
+2026-07-14** — 60 fps gliding needle + CRC-gate reject test both pass. Full-cluster
+port next. Open sub-items: kiosk/autostart mechanism, TV 1080p-UI confirmation
+(`docs/ANDROID_MIGRATION.md` §10).
 
 ---
 

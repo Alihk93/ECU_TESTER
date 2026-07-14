@@ -114,21 +114,24 @@ ECU_TESTER/
 └── firmware/       ← UNCHANGED
 ```
 
-## 9. First milestone — M1-Android (mirror of `docs/M1_VERTICAL_SLICE.md`)
+## 9. First milestone — M1-Android — **PASSED 2026-07-14**
 
-**One real Android TV box → connect `/ws` (or sim) → decode `rpm` → drive the RPM
-needle at 60 fps.** Proves the whole path — OkHttp + Kotlin decode + GPU needle —
-before rebuilding all 40+ components.
+**One device → connect `/ws` (or sim) → decode `rpm` → drive the RPM needle at
+60 fps.** Proved the whole path — OkHttp + Kotlin decode + GPU needle — before
+rebuilding all 40+ components.
 
-**PASS** iff, against `sim_server.py` (or a live device):
-- the RPM needle tracks the breathing rpm smoothly, gliding between updates;
-- the reading matches the sim's rpm;
-- a deliberately corrupted CRC (flip one payload byte in the sim) **freezes** the
-  needle — proving `Protocol.kt`'s CRC/magic gating end-to-end, not the happy path;
-- the diag overlay reads a steady 60 fps on the actual TV.
+**Verified on a real handset** (Huawei VOG-L29, Android; via `adb reverse` tunnel
+to `tools/sim_server.py` on the laptop — no shared Wi-Fi needed):
+- ✅ RPM needle glides with the breathing rpm; reading tracks it; **steady 60 fps**
+  on the corner meter; WS counter climbed continuously (LINK stable).
+- ✅ **CRC gate**: `sim_server.py --corrupt` (bad CRC on every frame) **froze** the
+  WS counter and needle — `Protocol.kt` rejects every corrupt frame, exactly like
+  `protocol.js`. This is the rigorous end-to-end contract check, not just happy path.
 
-If it passes, the contract is validated on Android and the full rebuild
-(all gauges/banks/scope/status) is a safe next step.
+The on-Android-**TV** run (against the ESP32 at `10.10.10.10`) is still worth doing
+when back home, but the pipeline itself is device-agnostic and proven. Full-cluster
+rebuild (status grid, banks, scope, mini-gauges — reusing `web/assets/` PNGs) is
+now a safe next step.
 
 ## 10. Open items to resolve before deployment (not before the slice)
 

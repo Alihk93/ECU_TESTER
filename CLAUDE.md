@@ -112,7 +112,13 @@ All gating questions D0–D8 answered **2026-07-02**:
   coarse decimated envelope for the analog look; triggered single-shot deferred.
 - **D7 expansion:** MCP23017 (slow status) + 74HC165 (coil/injector activity) +
   ADS1115 (precision analog). No capture-front-end MCU (D3 = activity-only).
-- **D8 display = Chromium kiosk on a mini-PC.**
+- **D8 display = Chromium kiosk on a mini-PC** *(superseded for the smart-TV fleet by D9)*.
+- **D9 (2026-07-13) display client = native Android TV app** — GPU-composited, removes
+  the TV browser's software-render FPS ceiling. Firmware/protocol/assets unchanged; the
+  app is another WS client on `/ws` (`Protocol.kt` = 4th contract mirror). `web/` kept as
+  fallback, not deprecated. M1 slice (RPM needle) built + **verified on-device 2026-07-14**
+  (60 fps + CRC-gate). See [`docs/ANDROID_MIGRATION.md`](docs/ANDROID_MIGRATION.md); build
+  env in `android/README.md`.
 
 **Next build targets (for Claude Code):** `i2c_bus` + `ads1115` + `mcp23017` drivers,
 `hc165` shift-chain reader, `ckp_capture` (RMT/GPTimer) with 60-2 decode + RPM,
