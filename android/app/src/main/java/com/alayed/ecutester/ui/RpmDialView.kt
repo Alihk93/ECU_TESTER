@@ -143,7 +143,7 @@ class RpmDialView @JvmOverloads constructor(
         x1000Paint.textSize = 13f
         canvas.drawText("×1000", cx, cy + 60f, x1000Paint)
         readingPaint.textSize = 37f
-        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 98f, readingPaint)
+        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 110f, readingPaint)
 
         canvas.restore()
     }

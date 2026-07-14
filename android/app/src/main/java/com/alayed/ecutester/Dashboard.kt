@@ -203,8 +203,7 @@ class Dashboard(private val root: View) {
             host.addView(row, rlp)
             for (col in 0 until 2) {
                 val name = order[idx++]
-                val tile = FrameLayout(root.context)
-                tile.setBackgroundResource(R.drawable.bd_mg)
+                val tile = FrameLayout(root.context)   // no outline (client feedback)
                 val tlp = llp(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                 if (col > 0) tlp.marginStart = 10
                 row.addView(tile, tlp)
@@ -221,11 +220,13 @@ class Dashboard(private val root: View) {
 
     /* ---------------- output banks ---------------- */
     private fun buildBanks() {
-        data class Cfg(val kind: String, val host: Int, val img: Int, val overlay: Int)
+        // sprayDx: px nudge so the spray sits under the nozzle, which isn't centered
+        // in the component PNG (injector nozzle +6.6% right, gdi -10.2% left of center).
+        data class Cfg(val kind: String, val host: Int, val img: Int, val overlay: Int, val sprayDx: Int)
         val cfgs = listOf(
-            Cfg("coil", R.id.bank_coil, R.drawable.coil, R.drawable.spark_bolt),
-            Cfg("inj", R.id.bank_inj, R.drawable.injector, R.drawable.spray),
-            Cfg("gdi", R.id.bank_gdi, R.drawable.gdi, R.drawable.spray_gdi),
+            Cfg("coil", R.id.bank_coil, R.drawable.coil, R.drawable.spark_bolt, 0),
+            Cfg("inj", R.id.bank_inj, R.drawable.injector, R.drawable.spray, 4),
+            Cfg("gdi", R.id.bank_gdi, R.drawable.gdi, R.drawable.spray_gdi, -5),
         )
         for (c in cfgs) {
             val host = root.findViewById<LinearLayout>(c.host)
@@ -268,6 +269,7 @@ class Dashboard(private val root: View) {
                     overlay.scaleType = ImageView.ScaleType.FIT_CENTER
                     overlay.setImageResource(c.overlay)
                     overlay.alpha = 0f
+                    overlay.translationX = c.sprayDx.toFloat()   // align under the nozzle
                     fx.addView(overlay, FrameLayout.LayoutParams(
                         if (spark) 74 else 92, 52, Gravity.CENTER))
 
