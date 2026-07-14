@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "af9bee3 · perf(web+fw): TV FPS pass — waveform stream off by default, stepped CAN, composited wobble + old-TV compat fixes (flex gap/inset)",
-  "lastCommitDate": "2026-07-12T08:14:56+03:00",
+  "lastCommit": "54983d3 · feat(android): M1 vertical slice — RPM needle over WebSocket (builds to APK)",
+  "lastCommitDate": "2026-07-14T04:47:38+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-12T05:15:06.744131831Z"
+  "lastSync": "2026-07-14T01:47:59.116872879Z"
 }
