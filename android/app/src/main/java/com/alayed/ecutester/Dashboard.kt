@@ -1,6 +1,8 @@
 package com.alayed.ecutester
 
+import android.animation.Keyframe
 import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.Typeface
@@ -47,8 +49,10 @@ class Dashboard(private val root: View) {
 
     private val gauges = HashMap<String, MiniGaugeView>()
 
-    private class Bank(val overlay: ImageView, val cell: View, var anim: ValueAnimator? = null)
+    private class Bank(val overlay: ImageView, val spark: Boolean,
+                       var lastActive: Boolean = false, var anim: ObjectAnimator? = null)
     private val banks = HashMap<String, Array<Bank>>()
+    private var currentRpm = 0
 
     init {
         buildStatusGrid()
@@ -244,13 +248,19 @@ class Dashboard(private val root: View) {
                     })
                     cell.addView(makeBadge(n.toString()))
 
+                    val spark = c.kind == "coil"
                     val overlay = ImageView(root.context)
                     overlay.scaleType = ImageView.ScaleType.FIT_CENTER
                     overlay.setImageResource(c.overlay)
                     overlay.alpha = 0f
-                    cell.addView(overlay, FrameLayout.LayoutParams(70, 60, Gravity.CENTER).apply { topMargin = -6 })
+                    // spark sits over the coil top; spray comes out the nozzle below
+                    val olp = if (spark)
+                        FrameLayout.LayoutParams(74, 66, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 4 }
+                    else
+                        FrameLayout.LayoutParams(90, 52, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = 2 }
+                    cell.addView(overlay, olp)
 
-                    cells.add(Bank(overlay, cell))
+                    cells.add(Bank(overlay, spark))
                     n++
                 }
             }
@@ -258,24 +268,42 @@ class Dashboard(private val root: View) {
         }
     }
 
+    // spark: a flickery pop; spray: a smoother pulse — one shot per firing event.
+    private val sparkKf = arrayOf(
+        Keyframe.ofFloat(0f, 0f), Keyframe.ofFloat(0.10f, 1f), Keyframe.ofFloat(0.22f, 0.45f),
+        Keyframe.ofFloat(0.36f, 1f), Keyframe.ofFloat(0.55f, 0.3f), Keyframe.ofFloat(0.75f, 0.7f),
+        Keyframe.ofFloat(1f, 0f),
+    )
+    private val sprayKf = arrayOf(
+        Keyframe.ofFloat(0f, 0f), Keyframe.ofFloat(0.15f, 1f), Keyframe.ofFloat(0.5f, 0.85f),
+        Keyframe.ofFloat(1f, 0f),
+    )
+
+    /** Fire a single flash on each channel's rising edge (fired-since-last-frame).
+     *  One spark per firing event; faster (shorter) flash as RPM climbs. */
     private fun setBankActivity(kind: String, byteVal: Int) {
         val arr = banks[kind] ?: return
+        val dur = (420L - (currentRpm / 8000f * 200L).toLong()).coerceIn(200L, 420L)
         for (i in 0 until 8) {
             val active = (byteVal ushr i) and 1 == 1
             val b = arr[i]
-            if (active && b.anim == null) {
-                val a = ObjectAnimator.ofFloat(b.overlay, "alpha", 0f, 1f, 0.2f, 0.75f, 0f)
-                a.duration = 900; a.repeatCount = ValueAnimator.INFINITE
-                a.start(); b.anim = a
-            } else if (!active && b.anim != null) {
-                b.anim?.cancel(); b.anim = null; b.overlay.alpha = 0f
+            if (active && !b.lastActive) {
+                b.anim?.cancel()
+                b.overlay.alpha = 0f
+                val pvh = PropertyValuesHolder.ofKeyframe("alpha", *(if (b.spark) sparkKf else sprayKf))
+                val a = ObjectAnimator.ofPropertyValuesHolder(b.overlay, pvh)
+                a.duration = dur
+                a.start()
+                b.anim = a
             }
+            b.lastActive = active
         }
     }
 
     /* ---------------- telemetry ---------------- */
     private var lastV = ""
     fun applyTelemetry(t: Protocol.Telemetry) {
+        currentRpm = t.rpm
         dial.setRpm(t.rpm)
         scope.setRpm(t.rpm)
         val v = "%.2f".format(t.ecuV / 1000.0)

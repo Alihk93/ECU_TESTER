@@ -51,6 +51,10 @@ class RpmDialView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create("sans-serif", Typeface.BOLD)
     }
+    private val x1000Paint = paint(Color.parseColor("#9fb0c0"), Paint.Style.FILL).apply {
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+    }
     private val readingPaint = paint(Color.parseColor("#f0f5fa"), Paint.Style.FILL).apply {
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create("sans-serif", Typeface.BOLD)
@@ -134,9 +138,11 @@ class RpmDialView @JvmOverloads constructor(
 
         // center text block (title / ×1000 / reading)
         titlePaint.textSize = 30f
-        canvas.drawText("RPM", cx, cy + 74f, titlePaint)
+        canvas.drawText("RPM", cx, cy + 70f, titlePaint)
+        x1000Paint.textSize = 13f
+        canvas.drawText("×1000", cx, cy + 90f, x1000Paint)
         readingPaint.textSize = 23f
-        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 118f, readingPaint)
+        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 116f, readingPaint)
 
         canvas.restore()
     }
