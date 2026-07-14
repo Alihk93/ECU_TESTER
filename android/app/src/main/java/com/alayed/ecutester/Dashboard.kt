@@ -127,10 +127,12 @@ class Dashboard(private val root: View) {
         b.text = text
         b.setBackgroundResource(R.drawable.bd_badge)
         b.setTextColor(color("#04101f"))
-        b.textSize = 14f
-        b.setTypeface(b.typeface, Typeface.BOLD)
+        b.textSize = 17f
+        b.setTypeface(Typeface.create("sans-serif", Typeface.BOLD)) // crisp digit, not Saira
+        b.includeFontPadding = false
         b.gravity = Gravity.CENTER
-        b.layoutParams = FrameLayout.LayoutParams(22, 22, Gravity.TOP or Gravity.START)
+        b.setPadding(0, 0, 0, 0)
+        b.layoutParams = FrameLayout.LayoutParams(26, 26, Gravity.TOP or Gravity.START)
         return b
     }
 
@@ -240,26 +242,32 @@ class Dashboard(private val root: View) {
                     if (col > 0) clp.marginStart = 10
                     row.addView(cell, clp)
 
+                    // vertical: component image (top, flexible) then a dedicated effect
+                    // zone BENEATH it — the spark/spray no longer overlaps the component.
+                    val content = LinearLayout(root.context)
+                    content.orientation = LinearLayout.VERTICAL
+                    cell.addView(content, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
                     val img = ImageView(root.context)
                     img.scaleType = ImageView.ScaleType.FIT_CENTER
                     img.setImageResource(c.img)
-                    cell.addView(img, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
-                        setMargins(6, 6, 6, 24)
+                    content.addView(img, llp(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                        setMargins(6, 8, 6, 2)
                     })
-                    cell.addView(makeBadge(n.toString()))
+
+                    val fx = FrameLayout(root.context)
+                    content.addView(fx, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 54))
 
                     val spark = c.kind == "coil"
                     val overlay = ImageView(root.context)
                     overlay.scaleType = ImageView.ScaleType.FIT_CENTER
                     overlay.setImageResource(c.overlay)
                     overlay.alpha = 0f
-                    // spark sits over the coil top; spray comes out the nozzle below
-                    val olp = if (spark)
-                        FrameLayout.LayoutParams(74, 66, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 4 }
-                    else
-                        FrameLayout.LayoutParams(90, 52, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = 2 }
-                    cell.addView(overlay, olp)
+                    fx.addView(overlay, FrameLayout.LayoutParams(
+                        if (spark) 74 else 92, 52, Gravity.CENTER))
 
+                    cell.addView(makeBadge(n.toString()))
                     cells.add(Bank(overlay, spark))
                     n++
                 }

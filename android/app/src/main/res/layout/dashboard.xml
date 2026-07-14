@@ -187,9 +187,12 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- ================= BANKS (cells filled in code) ================= -->
+        <!-- ================= BANKS (cells filled in code) =================
+             Taller than the web (330→365) so each cell fits the component image
+             plus a dedicated spark/spray zone beneath it; the flexible mid row
+             above absorbs the difference. -->
         <LinearLayout
-            android:layout_width="match_parent" android:layout_height="330px"
+            android:layout_width="match_parent" android:layout_height="365px"
             android:layout_marginTop="12px" android:orientation="horizontal">
             <LinearLayout android:id="@+id/bank_coil"
                 android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1"

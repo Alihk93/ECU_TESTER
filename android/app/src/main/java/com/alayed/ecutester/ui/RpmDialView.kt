@@ -136,13 +136,14 @@ class RpmDialView @JvmOverloads constructor(
         canvas.drawCircle(cx, cy, 16f, hubRing)
         canvas.drawCircle(cx, cy, 6f, hubInner)
 
-        // center text block (title / ×1000 / reading)
+        // "RPM" title ABOVE the hub (like the mini-gauge titles); the reading (bigger)
+        // and ×1000 sit below the hub, clear of the 0/8 rim numbers.
         titlePaint.textSize = 30f
-        canvas.drawText("RPM", cx, cy + 70f, titlePaint)
+        canvas.drawText("RPM", cx, cy - 58f, titlePaint)
         x1000Paint.textSize = 13f
-        canvas.drawText("×1000", cx, cy + 90f, x1000Paint)
-        readingPaint.textSize = 23f
-        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 116f, readingPaint)
+        canvas.drawText("×1000", cx, cy + 60f, x1000Paint)
+        readingPaint.textSize = 32f
+        canvas.drawText(commafy(displayedRpm.toInt()), cx, cy + 96f, readingPaint)
 
         canvas.restore()
     }

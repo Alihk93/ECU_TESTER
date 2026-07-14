@@ -37,6 +37,10 @@ class MiniGaugeView @JvmOverloads constructor(
         color = Color.parseColor("#9298a0"); style = Paint.Style.STROKE
         strokeWidth = 1.2f; strokeCap = Paint.Cap.ROUND
     }
+    private val redline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#ff4a1e"); style = Paint.Style.STROKE
+        strokeWidth = 3f; strokeCap = Paint.Cap.ROUND
+    }
     private val needle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#c07a38") }
     private val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#b6bbc0"); textAlign = Paint.Align.CENTER
@@ -76,10 +80,22 @@ class MiniGaugeView @JvmOverloads constructor(
             canvas.drawLine(p1[0], p1[1], p2[0], p2[1], tick)
         }
 
+        // red limit arc at the high (5 V) end — like the RPM redline (last ~15%)
+        val vRed = 4.25f
+        val red = Path()
+        var vv = vRed
+        var first = true
+        while (vv <= 5.0001f) {
+            val p = pt(r - 1f, start - (vv / 5f) * span)
+            if (first) { red.moveTo(p[0], p[1]); first = false } else red.lineTo(p[0], p[1])
+            vv += 0.1f
+        }
+        canvas.drawPath(red, redline)
+
         // name + value
         namePaint.textSize = 18f
         canvas.drawText(label, cx, cy - 8f, namePaint)
-        valuePaint.textSize = 30f
+        valuePaint.textSize = 26f
         canvas.drawText("%.2f".format(displayed), cx, cy + 40f, valuePaint)
 
         // needle at the current voltage angle
