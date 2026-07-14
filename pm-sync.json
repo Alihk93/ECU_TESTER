@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "54983d3 · feat(android): M1 vertical slice — RPM needle over WebSocket (builds to APK)",
-  "lastCommitDate": "2026-07-14T04:47:38+03:00",
+  "lastCommit": "c26462c · docs: M1-Android verified on device; log D9 (display client = Android TV app)",
+  "lastCommitDate": "2026-07-14T06:17:26+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T01:47:59.116872879Z"
+  "lastSync": "2026-07-14T03:17:26.840891284Z"
 }
