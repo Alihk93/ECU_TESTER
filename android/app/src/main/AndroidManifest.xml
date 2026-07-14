@@ -17,7 +17,9 @@
         android:banner="@drawable/banner"
         android:label="@string/app_name"
         android:supportsRtl="false"
-        android:theme="@style/Theme.EcuTester">
+        android:theme="@style/Theme.EcuTester"
+        android:usesCleartextTraffic="true"><!-- local appliance, no TLS: ws:// to
+             the ESP32 / sim is cleartext, which targetSdk 34 blocks by default -->
 
         <activity
             android:name=".MainActivity"
