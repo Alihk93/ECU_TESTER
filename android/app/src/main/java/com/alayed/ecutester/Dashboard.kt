@@ -3,9 +3,9 @@ package com.alayed.ecutester
 import android.animation.Keyframe
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
-import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.Typeface
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -37,12 +37,18 @@ class Dashboard(private val root: View) {
     // gauges + scope (from XML)
     private val dial = root.findViewById<RpmDialView>(R.id.rpm_dial)
     private val scope = root.findViewById<ScopeView>(R.id.scope_view)
+    private val canScope = root.findViewById<ScopeView>(R.id.can_scope)
 
     // built cells
     private class StatusCell(val box: View, val img: ImageView, val red: Boolean)
     private val statusCells = HashMap<String, StatusCell>()
-    private val fanSpin = HashMap<String, ObjectAnimator>()
     private val iacLeds = ArrayList<View>()
+
+    // fans: eased angular velocity (soft start-up to top speed, coast-down to stop)
+    private class Fan(val img: ImageView) { var on = false; var angle = 0f; var speed = 0f }
+    private val fans = HashMap<String, Fan>()
+    private var fanLoopScheduled = false
+    private var fanLast = 0L
 
     private class Indicator(val label: TextView, val circle: View, val img: ImageView, val ring: Int)
     private val indicators = HashMap<String, Indicator>()
@@ -59,6 +65,7 @@ class Dashboard(private val root: View) {
         buildIndicators()
         buildMiniGauges()
         buildBanks()
+        canScope.configureCan()   // green, constant-rate, scrolling
         // CTS/IGF have no protocol v1 field — pinned at 0 like the web
         gauges["CTS"]?.setVolts(0f)
         gauges["IGF"]?.setVolts(0f)
@@ -113,12 +120,7 @@ class Dashboard(private val root: View) {
                     iacLeds.add(led)
                 }
             }
-            if (c.key == "fan1" || c.key == "fan2") {
-                val spin = ObjectAnimator.ofFloat(img, "rotation", 0f, 360f)
-                spin.duration = 1150; spin.repeatCount = ValueAnimator.INFINITE
-                spin.interpolator = android.view.animation.LinearInterpolator()
-                fanSpin[c.key] = spin
-            }
+            if (c.key == "fan1" || c.key == "fan2") fans[c.key] = Fan(img)
         }
     }
 
@@ -127,12 +129,12 @@ class Dashboard(private val root: View) {
         b.text = text
         b.setBackgroundResource(R.drawable.bd_badge)
         b.setTextColor(color("#04101f"))
-        b.textSize = 17f
+        b.textSize = 12f
         b.setTypeface(Typeface.create("sans-serif", Typeface.BOLD)) // crisp digit, not Saira
         b.includeFontPadding = false
         b.gravity = Gravity.CENTER
         b.setPadding(0, 0, 0, 0)
-        b.layoutParams = FrameLayout.LayoutParams(26, 26, Gravity.TOP or Gravity.START)
+        b.layoutParams = FrameLayout.LayoutParams(19, 19, Gravity.TOP or Gravity.START)
         return b
     }
 
@@ -347,13 +349,35 @@ class Dashboard(private val root: View) {
     private fun setStatusCell(key: String, on: Boolean) {
         val c = statusCells[key] ?: return
         if (key == "fan1" || key == "fan2") {
-            val spin = fanSpin[key] ?: return
-            if (on && !spin.isStarted) spin.start()
-            else if (!on && spin.isStarted) { spin.cancel(); c.img.rotation = 0f }
+            fans[key]?.let { if (it.on != on) { it.on = on; ensureFanLoop() } }
             return
         }
         // red cells (imo/hip): dim when inactive
         c.img.alpha = if (on) 1f else 0.4f
+    }
+
+    // Soft start / stop: each fan's speed eases toward top (on) or 0 (off); the loop
+    // runs only while a fan is spinning or spinning down, then self-stops.
+    private fun ensureFanLoop() {
+        if (fanLoopScheduled) return
+        fanLoopScheduled = true
+        fanLast = 0L
+        Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
+            override fun doFrame(now: Long) {
+                val dt = if (fanLast == 0L) 0.016f else (now - fanLast) / 1e9f
+                fanLast = now
+                var active = false
+                for (f in fans.values) {
+                    val target = if (f.on) 300f else 0f          // deg/sec top speed
+                    if (f.speed < target) f.speed = minOf(target, f.speed + 220f * dt)  // spin-up ~1.4 s
+                    else if (f.speed > target) f.speed = maxOf(target, f.speed - 140f * dt) // coast ~2.1 s
+                    if (f.speed > 0.05f) { f.angle = (f.angle + f.speed * dt) % 360f; f.img.rotation = f.angle }
+                    if (f.on || f.speed > 0.05f) active = true
+                }
+                if (active) Choreographer.getInstance().postFrameCallback(this)
+                else fanLoopScheduled = false
+            }
+        })
     }
 
     private fun setIndicator(name: String, on: Boolean) {
