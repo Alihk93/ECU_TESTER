@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "8220a5d · feat(android): full cluster — status grid, indicators, mini-gauges, banks, scope",
-  "lastCommitDate": "2026-07-14T12:57:50+03:00",
+  "lastCommit": "c33993a · fix(android): indicator labels — auto-size to fit columns (verified on device)",
+  "lastCommitDate": "2026-07-14T13:24:41+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T09:58:14.417662057Z"
+  "lastSync": "2026-07-14T10:24:41.096171188Z"
 }
