@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "4c76be1 · polish(android): drop badge box, keep plain white cell numbers",
-  "lastCommitDate": "2026-07-14T15:42:42+03:00",
+  "lastCommit": "ccbf6cb · polish(android): thin cell numbers, red bolt coil spark, bigger RPM reading",
+  "lastCommitDate": "2026-07-14T16:07:44+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T12:42:42.013849677Z"
+  "lastSync": "2026-07-14T13:07:44.198694300Z"
 }
