@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No ActionBar, fullscreen; navy window background so there is no white flash
+         on launch. Parent is a non-TV AppCompat theme so the one APK also runs on a
+         phone/tablet for development (leanback isn't required). -->
+    <style name="Theme.EcuTester" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@color/navy</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

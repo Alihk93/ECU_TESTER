@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M1 slice screen: the RPM dial centered on the marine navy background, with a
+     corner FPS/link meter. The full 1920x1080 cluster layout replaces this later. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/navy">
+
+    <com.alayed.ecutester.ui.RpmDialView
+        android:id="@+id/rpm_dial"
+        android:layout_width="480dp"
+        android:layout_height="480dp"
+        android:layout_gravity="center" />
+
+    <TextView
+        android:id="@+id/meter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="12dp"
+        android:padding="6dp"
+        android:background="@color/meter_bg"
+        android:fontFamily="monospace"
+        android:textColor="@color/meter_fg"
+        android:textSize="14sp"
+        android:text="FPS -- · no link · WS 0 · age --ms" />
+
+</FrameLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- flat marine skin (web/style.css :root) -->
+    <color name="navy">#33516f</color>
+    <color name="navy_deep">#22374f</color>
+    <color name="meter_bg">#D1020609</color>
+    <color name="meter_fg">#a9e7ff</color>
+</resources>
