@@ -49,6 +49,29 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - **Real Android TV box + device:** join Wi-Fi `ECU_TESTER` / `00000000`, keep the
   default `10.10.10.10`.
 
+## Kiosk / autostart (appliance mode)
+
+The app is built to run unattended on a dedicated TV (D9, migration doc §6.1). Three
+layers, each independent:
+
+1. **Autostart on boot** — `BootReceiver` launches the dashboard on `BOOT_COMPLETED`
+   (needs no special setup; the `RECEIVE_BOOT_COMPLETED` permission is declared).
+2. **Stay up** — immersive-sticky fullscreen + `FLAG_KEEP_SCREEN_ON`, and a crash
+   handler that relaunches the activity ~1.5 s after any uncaught exception.
+3. **Full lock (optional, no exit)** — screen-pinning via lock-task, enabled ONLY
+   when the app is **device owner**. Set it once on a factory-fresh / account-free
+   device:
+   ```sh
+   adb shell dpm set-device-owner com.alayed.ecutester/.EcuDeviceAdminReceiver
+   ```
+   Then `MainActivity.setupKiosk()` allowlists itself and calls `startLockTask()`.
+   Undo with `adb shell dpm remove-active-admin com.alayed.ecutester/.EcuDeviceAdminReceiver`.
+   Without device owner this is a no-op, so dev/phone builds are unaffected.
+
+Alternatively (no device owner), a dedicated box can just set ECU_TESTER as its
+**default launcher** (the activity also declares `CATEGORY_HOME`): it then owns the
+screen and the Home button returns to it.
+
 ## Updates
 
 Service-visit sideload via `adb install -r` (decision C in the migration doc). No

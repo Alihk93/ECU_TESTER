@@ -1,13 +1,21 @@
 package com.alayed.ecutester
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.util.Log
 import android.view.Choreographer
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import kotlin.system.exitProcess
 
 /**
  * Cluster host: immersive fullscreen, WebSocket link, and a corner FPS/link meter.
@@ -42,6 +50,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashRestart()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
         goImmersive()
@@ -93,11 +102,51 @@ class MainActivity : AppCompatActivity() {
         meter.text = "FPS $fps · ${if (connected) "LINK" else "no link"} $hostLabel · WS ${mapper.frames} · age ${age}ms"
     }
 
+    override fun onResume() {
+        super.onResume()
+        setupKiosk()
+    }
+
     override fun onDestroy() { socket.close(); super.onDestroy() }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) goImmersive()
+    }
+
+    /* ---- kiosk ---- */
+
+    // Restart the dashboard ~1.5 s after any uncaught crash — an unattended kiosk
+    // must not die to a blank screen. (Belt-and-suspenders with BootReceiver.)
+    private fun installCrashRestart() {
+        val ctx = applicationContext
+        Thread.setDefaultUncaughtExceptionHandler { _, e ->
+            Log.e("ECU", "uncaught — restarting", e)
+            val intent = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val pi = PendingIntent.getActivity(
+                ctx, 0, intent, PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE)
+            (ctx.getSystemService(ALARM_SERVICE) as AlarmManager)
+                .set(AlarmManager.RTC, System.currentTimeMillis() + 1500, pi)
+            Process.killProcess(Process.myPid())
+            exitProcess(1)
+        }
+    }
+
+    private var lockTaskTried = false
+
+    // Full unattended lock (no exit) only when the app is device owner — set once with
+    //   adb shell dpm set-device-owner com.alayed.ecutester/.EcuDeviceAdminReceiver
+    // Without device owner this is a no-op, so a dev/phone build is unaffected.
+    private fun setupKiosk() {
+        val dpm = getSystemService(DevicePolicyManager::class.java) ?: return
+        if (dpm.isDeviceOwnerApp(packageName)) {
+            val admin = ComponentName(this, EcuDeviceAdminReceiver::class.java)
+            runCatching { dpm.setLockTaskPackages(admin, arrayOf(packageName)) }
+        }
+        if (!lockTaskTried && dpm.isLockTaskPermitted(packageName)) {
+            lockTaskTried = true
+            runCatching { startLockTask() }
+        }
     }
 
     private fun goImmersive() {

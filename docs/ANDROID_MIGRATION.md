@@ -133,11 +133,14 @@ when back home, but the pipeline itself is device-agnostic and proven. Full-clus
 rebuild (status grid, banks, scope, mini-gauges — reusing `web/assets/` PNGs) is
 now a safe next step.
 
-## 10. Open items to resolve before deployment (not before the slice)
+## 10. Open items
 
-- Exact kiosk/autostart mechanism per §6.1 (device-owner vs launcher replacement).
-- Confirm the fleet's TVs report **1080p UI resolution** to apps (nearly all do,
+- ✅ **Kiosk/autostart** — implemented (2026-07-14): `BootReceiver` (BOOT_COMPLETED),
+  immersive + keep-screen-on + crash-relaunch, and optional device-owner lock-task.
+  Setup in `android/README.md`. Still to **exercise on a real TV** (reboot test +,
+  if wanted, `dpm set-device-owner`).
+- ✅ **D9 logged** in `CLAUDE.md` §4 + `OPEN_DECISIONS.md` (web/ kept as fallback).
+- ⏳ Run the full cluster on a real Android **TV** against the ESP32 (`10.10.10.10`) —
+  all validated on a handset via the sim so far.
+- ⏳ Confirm the fleet's TVs report **1080p UI resolution** to apps (nearly all do,
   even 4K panels) so the fixed 1920×1080 design space maps 1:1.
-- Whether to bump `CLAUDE.md` §Architecture + `OPEN_DECISIONS.md` with a formal
-  **D9 "display client = Android TV app"** once the slice passes (keep the source
-  of truth honest; don't mark `web/` deprecated — it's the fallback per decision D).
