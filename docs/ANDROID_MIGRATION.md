@@ -133,6 +133,26 @@ when back home, but the pipeline itself is device-agnostic and proven. Full-clus
 rebuild (status grid, banks, scope, mini-gauges — reusing `web/assets/` PNGs) is
 now a safe next step.
 
+## 9a. Full cluster — DONE + polished (2026-07-14)
+
+The complete dashboard is ported and verified on a handset at a locked **60 fps**
+(via the sim over `adb reverse`), reusing all `web/assets/` art (PNGs; Saira +
+DSEG7 converted to TTF):
+
+- **Layout**: `StageLayout` scales a fixed 1920×1080 tree; `dashboard.xml` mirrors
+  the web flex structure. Top bar (7-seg DSEG readouts), status grid (fans + IMO/
+  HIP + IAC LEDs), scope, indicator row, RPM dial, 6 mini-gauges, 3×8 banks.
+- **Custom views**: `RpmDialView`, `MiniGaugeView` (red-limit arc), `ScopeView`
+  (CKP/CMP + CAN, **smooth-scrolling** — the native GPU lifts the TV-browser
+  "static scope" constraint).
+- **Behaviour**: gliding needles (ValueAnimator), per-firing spark/spray flashes
+  beneath each component, **soft-start/coast fans** (eased angular velocity),
+  status/indicator lit-vs-dim, IAC phase LEDs, CTS/IGF/current pinned 0.
+- **Demo mode** (`DemoDriver`): free-runs synthetic telemetry until the first real
+  frame (web parity; showroom looks alive when the ESP32 is off).
+- **Kiosk**: autostart, crash-relaunch, show-over-lockscreen, optional device-owner
+  lock-task (§10, `android/README.md`).
+
 ## 10. Open items
 
 - ✅ **Kiosk/autostart** — implemented (2026-07-14): `BootReceiver` (BOOT_COMPLETED),
