@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "c33993a · fix(android): indicator labels — auto-size to fit columns (verified on device)",
-  "lastCommitDate": "2026-07-14T13:24:41+03:00",
+  "lastCommit": "f279fdf · polish(android): RPM ×1000 label + crisp per-firing spark/spray flashes",
+  "lastCommitDate": "2026-07-14T13:31:58+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T10:24:41.096171188Z"
+  "lastSync": "2026-07-14T10:31:58.067118419Z"
 }
