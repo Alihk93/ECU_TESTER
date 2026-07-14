@@ -10,6 +10,9 @@ WebSocket client on `/ws`. `Protocol.kt` is the fourth mirror of the contract
 (`docs/PROTOCOL.md` ⇄ `protocol.h` ⇄ `web/js/protocol.js` ⇄ `Protocol.kt`); change
 all four together.
 
+Client-provided visual references (e.g. the coil spark bolt shape/color) live in
+`../docs/design-refs/` — not used at runtime, kept for provenance.
+
 ## Status — M1 vertical slice
 
 One screen: connect to `/ws`, decode `rpm`, drive a gliding RPM needle at 60 fps,
