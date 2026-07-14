@@ -7,5 +7,12 @@
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowBackground">@color/navy</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:textViewStyle">@style/SairaText</item>
+    </style>
+
+    <!-- Saira as the default face for every TextView (7-seg readouts override). -->
+    <style name="SairaText" parent="android:Widget.TextView">
+        <item name="android:fontFamily">@font/saira</item>
+        <item name="android:includeFontPadding">false</item>
     </style>
 </resources>

@@ -3,6 +3,38 @@
     <!-- flat marine skin (web/style.css :root) -->
     <color name="navy">#33516f</color>
     <color name="navy_deep">#22374f</color>
+    <color name="bezel">#8f9aa8</color>
+
+    <!-- borders (rgba over navy → #AARRGGBB) -->
+    <color name="line">#73A0BEDC</color>         <!-- rgba(160,190,220,.45) -->
+    <color name="frame_border">#567aa3</color>
+    <color name="border_fan">#993FA4FF</color>
+    <color name="border_red">#B3FF3C32</color>
+    <color name="border_iac">#5996A5B4</color>
+    <color name="border_scope">#52C89650</color>
+    <color name="border_can">#4C5AAA6E</color>
+    <color name="border_indic">#593C6EA0</color>
+    <color name="border_coil">#66FF8C32</color>
+    <color name="border_inj">#663FA4FF</color>
+    <color name="border_gdi">#66FF4A3D</color>
+    <color name="border_mg">#477A8A9E</color>
+
+    <!-- text + LEDs -->
+    <color name="txt_label">#c7d0d8</color>
+    <color name="seg_cyan">#3fe7e1</color>
+    <color name="seg_green">#46d420</color>
+    <color name="seg_red">#e73f3f</color>
+    <color name="led_green">#3ce06a</color>
+    <color name="led_red">#ff4a3d</color>
+    <color name="fan_blue">#5fb8ff</color>
+    <color name="red_txt">#ff5b50</color>
+    <color name="iac_txt">#e8edf2</color>
+    <color name="iac_led_on">#ff3b2d</color>
+    <color name="iac_led_off">#331914</color>
+    <color name="badge_bg">#2f7fd6</color>
+    <color name="mg_name">#b6bbc0</color>
+    <color name="mg_value">#f0f3f5</color>
+
     <color name="meter_bg">#D1020609</color>
     <color name="meter_fg">#a9e7ff</color>
 </resources>
