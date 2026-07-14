@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Red lightning bolt for the coil spark effect (replaces spark_lit.png shape/color).
+     Recreated as a vector from the client's reference image. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FF1414"
+        android:pathData="M300,24 L96,286 L226,286 L150,488 L416,214 L286,214 Z" />
+</vector>

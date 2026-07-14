@@ -129,8 +129,8 @@ class Dashboard(private val root: View) {
         val b = TextView(root.context)
         b.text = text
         b.setTextColor(color("#ffffff"))
-        b.textSize = 12f
-        b.setTypeface(Typeface.create("sans-serif", Typeface.BOLD)) // crisp digit, not Saira
+        b.textSize = 13f
+        b.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL)) // thin digit
         b.includeFontPadding = false
         b.setPadding(0, 0, 0, 0)
         b.layoutParams = FrameLayout.LayoutParams(
@@ -223,7 +223,7 @@ class Dashboard(private val root: View) {
     private fun buildBanks() {
         data class Cfg(val kind: String, val host: Int, val img: Int, val overlay: Int)
         val cfgs = listOf(
-            Cfg("coil", R.id.bank_coil, R.drawable.coil, R.drawable.spark_lit),
+            Cfg("coil", R.id.bank_coil, R.drawable.coil, R.drawable.spark_bolt),
             Cfg("inj", R.id.bank_inj, R.drawable.injector, R.drawable.spray),
             Cfg("gdi", R.id.bank_gdi, R.drawable.gdi, R.drawable.spray_gdi),
         )
