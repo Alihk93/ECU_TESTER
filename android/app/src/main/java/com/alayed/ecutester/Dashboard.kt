@@ -143,6 +143,9 @@ class Dashboard(private val root: View) {
             Cfg("ST-OFF", true, R.drawable.relay_nc),
             Cfg("PFC-OFF", true, R.drawable.relay_nc),
         )
+        // Equal weighted columns (never overflow the panel) + a wrap_content label
+        // sized to fit its ~69px column at 12px — full names show, no clip, no
+        // overflow. (The web fits these at 15px in Chrome; Saira runs a touch wider.)
         for (c in cfgs) {
             val col = LinearLayout(root.context)
             col.orientation = LinearLayout.VERTICAL
@@ -151,11 +154,17 @@ class Dashboard(private val root: View) {
 
             val label = TextView(root.context)
             label.text = c.name
-            label.textSize = 13f
-            label.maxLines = 1
+            label.setSingleLine()          // one line, no hyphen break
+            label.gravity = Gravity.CENTER
             label.setTypeface(label.typeface, Typeface.BOLD)
             label.setTextColor(if (c.green) color("#55e06a") else color("#ff4a3d"))
-            col.addView(label)
+            // Auto-size: fill the column width and shrink the label to the largest
+            // size that fits (8–14px). Avoids both hyphen-wrap clipping and
+            // overflow-into-neighbours, whatever the font metrics.
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                label, 8, 14, 1, android.util.TypedValue.COMPLEX_UNIT_PX)
+            col.addView(label, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
             val circle = FrameLayout(root.context)
             val ring = if (c.green) R.drawable.bd_indic_circle_green else R.drawable.bd_indic_circle_red
