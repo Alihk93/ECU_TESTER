@@ -128,13 +128,13 @@ class Dashboard(private val root: View) {
         val b = TextView(root.context)
         b.text = text
         b.setBackgroundResource(R.drawable.bd_badge)
-        b.setTextColor(color("#04101f"))
-        b.textSize = 12f
+        b.setTextColor(color("#ffffff"))
+        b.textSize = 11f
         b.setTypeface(Typeface.create("sans-serif", Typeface.BOLD)) // crisp digit, not Saira
         b.includeFontPadding = false
         b.gravity = Gravity.CENTER
         b.setPadding(0, 0, 0, 0)
-        b.layoutParams = FrameLayout.LayoutParams(19, 19, Gravity.TOP or Gravity.START)
+        b.layoutParams = FrameLayout.LayoutParams(17, 17, Gravity.TOP or Gravity.START)
         return b
     }
 
