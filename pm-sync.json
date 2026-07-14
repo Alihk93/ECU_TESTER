@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "2468b27 · polish(android): lower RPM reading, center sprays on nozzles, drop gauge/indicator outlines",
-  "lastCommitDate": "2026-07-14T16:35:31+03:00",
+  "lastCommit": "ddaba68 · polish(android): both fans in one outline box, RPM value lower",
+  "lastCommitDate": "2026-07-14T16:45:35+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T13:35:31.239300302Z"
+  "lastSync": "2026-07-14T13:45:35.989679962Z"
 }
