@@ -16,10 +16,25 @@ import com.alayed.ecutester.ui.RpmDialView
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        // Production default = the device SoftAP. For the Android TV emulator +
-        // tools/sim_server.py use "ws://10.0.2.2:8090/ws"; for a real box against a
-        // laptop sim use the laptop's LAN IP (bind sim_server to 0.0.0.0 first).
-        private const val WS_URL = "ws://10.10.10.10/ws"
+        // Production default = the device SoftAP.
+        private const val DEFAULT_HOST = "10.10.10.10"
+    }
+
+    /**
+     * Host[:port] to connect to, mirroring the web `?device=` override. Precedence:
+     *   1. an `--es host <h>` intent extra (persisted, so a relaunch keeps it)
+     *   2. the last persisted value
+     *   3. DEFAULT_HOST (the device SoftAP)
+     * Dev examples (no rebuild):
+     *   adb shell am start -n com.alayed.ecutester/.MainActivity --es host 192.168.1.50:8090
+     *   adb shell am start -n com.alayed.ecutester/.MainActivity --es host 10.10.10.10
+     * Emulator + tools/sim_server.py: use host 10.0.2.2:8090.
+     */
+    private fun resolveWsUrl(): String {
+        val prefs = getSharedPreferences("ecu", MODE_PRIVATE)
+        intent?.getStringExtra("host")?.let { prefs.edit().putString("host", it).apply() }
+        val host = prefs.getString("host", DEFAULT_HOST) ?: DEFAULT_HOST
+        return "ws://$host/ws"
     }
 
     private lateinit var dial: RpmDialView
@@ -32,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var lastFpsNs = 0L
     private var fps = 0
     private var connected = false
+    private var hostLabel = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,9 +58,11 @@ class MainActivity : AppCompatActivity() {
         dial = findViewById(R.id.rpm_dial)
         meter = findViewById(R.id.meter)
 
+        val wsUrl = resolveWsUrl()
+        hostLabel = wsUrl.removePrefix("ws://").removeSuffix("/ws")
         mapper = LiveMapper { t -> dial.setRpm(t.rpm) }
         socket = EcuSocket(
-            url = WS_URL,
+            url = wsUrl,
             onFrame = { mapper.onFrame(it) },
             onStatus = { st -> connected = st == "connected"; updateMeter() },
         )
@@ -69,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateMeter() {
         val age = if (mapper.lastTelemetryMs == 0L) "--"
         else (System.currentTimeMillis() - mapper.lastTelemetryMs).toString()
-        meter.text = "FPS $fps · ${if (connected) "LINK" else "no link"} · WS ${mapper.frames} · age ${age}ms"
+        meter.text = "FPS $fps · ${if (connected) "LINK" else "no link"} $hostLabel · WS ${mapper.frames} · age ${age}ms"
     }
 
     override fun onDestroy() {

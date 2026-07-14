@@ -211,12 +211,16 @@ def main():
     global SEND_WAVEFORMS
     ap = argparse.ArgumentParser(description="ECU_TESTER dashboard sim server")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8090)))
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="bind address — use 0.0.0.0 to accept LAN clients "
+                         "(e.g. an Android TV / box on the same network)")
     ap.add_argument("--waveforms", action="store_true",
                     help="also stream WAVEFORM edge frames (device default is off)")
     args = ap.parse_args()
     SEND_WAVEFORMS = args.waveforms
-    print(f"serving {WEB_ROOT} + protocol sim on http://localhost:{args.port}")
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    shown = "localhost" if args.host in ("127.0.0.1", "localhost") else args.host
+    print(f"serving {WEB_ROOT} + protocol sim on http://{shown}:{args.port}")
+    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 if __name__ == "__main__":
     main()
