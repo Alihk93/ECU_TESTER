@@ -108,22 +108,98 @@
                     android:orientation="horizontal" android:background="@drawable/bd_line14" android:padding="18px" />
 
                 <!-- SCOPE -->
-                <LinearLayout android:id="@+id/scope_panel"
+                <LinearLayout
                     android:layout_width="match_parent" android:layout_height="0px" android:layout_weight="1"
                     android:layout_marginTop="12px" android:orientation="vertical"
-                    android:background="@drawable/bd_scope" android:padding="14px" />
+                    android:background="@drawable/bd_scope" android:padding="14px">
+
+                    <!-- CKP / CMP1 / CMP2 plot -->
+                    <LinearLayout
+                        android:layout_width="match_parent" android:layout_height="0px" android:layout_weight="1.5"
+                        android:orientation="horizontal" android:background="@drawable/bd_scope_plot"
+                        android:paddingHorizontal="10px" android:paddingVertical="6px">
+                        <LinearLayout android:layout_width="56px" android:layout_height="match_parent" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="0px" android:layout_weight="1"
+                                android:gravity="center_vertical" android:text="CKP" android:textColor="#d8dde2" android:textSize="16px" android:textStyle="bold" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="0px" android:layout_weight="1"
+                                android:gravity="center_vertical" android:text="CMP1" android:textColor="#d8dde2" android:textSize="16px" android:textStyle="bold" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="0px" android:layout_weight="1"
+                                android:gravity="center_vertical" android:text="CMP2" android:textColor="#d8dde2" android:textSize="16px" android:textStyle="bold" />
+                        </LinearLayout>
+                        <com.alayed.ecutester.ui.ScopeView android:id="@+id/scope_view"
+                            android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1"
+                            android:layout_marginStart="10px" />
+                    </LinearLayout>
+
+                    <!-- CAN header -->
+                    <LinearLayout
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8px">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="CAN BUS" android:textColor="#e9edf1" android:textSize="18px" android:textStyle="bold" />
+                        <View android:layout_width="0px" android:layout_height="1px" android:layout_weight="1" />
+                        <View android:layout_width="9px" android:layout_height="9px" android:background="@drawable/bd_dot_green" />
+                        <View android:layout_width="9px" android:layout_height="9px" android:layout_marginStart="10px" android:background="@drawable/bd_dot_green" />
+                    </LinearLayout>
+
+                    <!-- CAN plot (decorative) -->
+                    <LinearLayout
+                        android:layout_width="match_parent" android:layout_height="0px" android:layout_weight="1"
+                        android:layout_marginTop="8px" android:orientation="vertical" android:gravity="center_vertical"
+                        android:background="@drawable/bd_can_plot" android:paddingHorizontal="10px" android:paddingVertical="6px">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                            <TextView android:layout_width="56px" android:layout_height="wrap_content" android:text="CAN HI" android:textColor="#d8dde2" android:textSize="16px" android:textStyle="bold" />
+                            <View android:layout_width="0px" android:layout_height="2px" android:layout_weight="1" android:background="#83cf92" />
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="18px">
+                            <TextView android:layout_width="56px" android:layout_height="wrap_content" android:text="CAN LO" android:textColor="#d8dde2" android:textSize="16px" android:textStyle="bold" />
+                            <View android:layout_width="0px" android:layout_height="2px" android:layout_weight="1" android:background="#83cf92" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
 
             <!-- GAUGES PANEL -->
-            <LinearLayout android:id="@+id/gauges_panel"
+            <LinearLayout
                 android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1"
-                android:layout_marginStart="14px" android:orientation="horizontal"
-                android:background="@drawable/bd_line14" android:padding="14px" />
+                android:layout_marginStart="14px" android:orientation="horizontal" android:weightSum="100"
+                android:background="@drawable/bd_line14" android:padding="14px">
+
+                <!-- left: indicators + RPM dial -->
+                <LinearLayout
+                    android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="54"
+                    android:orientation="vertical">
+                    <LinearLayout android:id="@+id/indicators"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:background="@drawable/bd_indic"
+                        android:paddingHorizontal="8px" android:paddingVertical="10px" />
+                    <FrameLayout
+                        android:layout_width="match_parent" android:layout_height="0px" android:layout_weight="1">
+                        <com.alayed.ecutester.ui.RpmDialView android:id="@+id/rpm_dial"
+                            android:layout_width="384px" android:layout_height="384px" android:layout_gravity="center" />
+                    </FrameLayout>
+                </LinearLayout>
+
+                <!-- right: 6 mini gauges (filled in code) -->
+                <LinearLayout android:id="@+id/mini_gauges"
+                    android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="46"
+                    android:layout_marginStart="14px" android:orientation="vertical" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- ================= BANKS ================= -->
-        <LinearLayout android:id="@+id/banks"
+        <!-- ================= BANKS (cells filled in code) ================= -->
+        <LinearLayout
             android:layout_width="match_parent" android:layout_height="330px"
-            android:layout_marginTop="12px" android:orientation="horizontal" />
+            android:layout_marginTop="12px" android:orientation="horizontal">
+            <LinearLayout android:id="@+id/bank_coil"
+                android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1"
+                android:background="@drawable/bd_coil" android:paddingHorizontal="14px" android:paddingTop="12px" android:paddingBottom="14px" />
+            <LinearLayout android:id="@+id/bank_inj"
+                android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="14px"
+                android:background="@drawable/bd_inj" android:paddingHorizontal="14px" android:paddingTop="12px" android:paddingBottom="14px" />
+            <LinearLayout android:id="@+id/bank_gdi"
+                android:layout_width="0px" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="14px"
+                android:background="@drawable/bd_gdi" android:paddingHorizontal="14px" android:paddingTop="12px" android:paddingBottom="14px" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>
