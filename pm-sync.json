@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "c26462c · docs: M1-Android verified on device; log D9 (display client = Android TV app)",
-  "lastCommitDate": "2026-07-14T06:17:26+03:00",
+  "lastCommit": "8220a5d · feat(android): full cluster — status grid, indicators, mini-gauges, banks, scope",
+  "lastCommitDate": "2026-07-14T12:57:50+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T03:17:26.840891284Z"
+  "lastSync": "2026-07-14T09:58:14.417662057Z"
 }
