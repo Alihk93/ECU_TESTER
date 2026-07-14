@@ -35,6 +35,9 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # Run with --waveforms to exercise the browser's cheap-discard path.
 SEND_WAVEFORMS = False
 
+# Test flag (--corrupt): break every frame's CRC to verify the client rejects them.
+CORRUPT_CRC = False
+
 # ---- protocol framing (docs/PROTOCOL.md §1) --------------------------------
 
 def crc16_ccitt(data: bytes) -> int:
@@ -50,7 +53,15 @@ assert crc16_ccitt(b"123456789") == 0x29B1  # standard check vector
 def make_frame(msg_type: int, seq: int, payload: bytes) -> bytes:
     head = struct.pack("<BBBBHH", 0xA5, 0x5A, 0x01, msg_type, seq & 0xFFFF, len(payload))
     body = head + payload
-    return body + struct.pack("<H", crc16_ccitt(body))
+    frame = body + struct.pack("<H", crc16_ccitt(body))
+    if CORRUPT_CRC and payload:
+        # flip one payload bit AFTER the CRC is computed -> every frame must fail
+        # the receiver's CRC check. A correct client drops all of them (needle
+        # freezes, WS/telemetry counter stops). A test tool, not the contract.
+        f = bytearray(frame)
+        f[8] ^= 0x01
+        frame = bytes(f)
+    return frame
 
 def telemetry_payload(t_us, rpm, maf, map_, iat, ecu_v, sensor_v,
                       coils, inj_reg, inj_gdi, status, iac) -> bytes:
@@ -208,7 +219,7 @@ class Handler(SimpleHTTPRequestHandler):
             print(f"[ws] client {self.client_address} disconnected")
 
 def main():
-    global SEND_WAVEFORMS
+    global SEND_WAVEFORMS, CORRUPT_CRC
     ap = argparse.ArgumentParser(description="ECU_TESTER dashboard sim server")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8090)))
     ap.add_argument("--host", default="127.0.0.1",
@@ -216,8 +227,13 @@ def main():
                          "(e.g. an Android TV / box on the same network)")
     ap.add_argument("--waveforms", action="store_true",
                     help="also stream WAVEFORM edge frames (device default is off)")
+    ap.add_argument("--corrupt", action="store_true",
+                    help="break every frame's CRC — a correct client must drop them all")
     args = ap.parse_args()
     SEND_WAVEFORMS = args.waveforms
+    CORRUPT_CRC = args.corrupt
+    if CORRUPT_CRC:
+        print("!! --corrupt: sending BAD CRCs; a correct client freezes (drops all frames)")
     shown = "localhost" if args.host in ("127.0.0.1", "localhost") else args.host
     print(f"serving {WEB_ROOT} + protocol sim on http://{shown}:{args.port}")
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
