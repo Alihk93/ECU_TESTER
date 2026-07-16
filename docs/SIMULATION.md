@@ -13,7 +13,7 @@ path — so sim also validates the wire format and the full pipeline.
 
 ## Front-end simulation (fallback)
 Pure JS fakes the data with no device at all — for showing the UI anywhere.
-- `web/js/app.js` has a hook: if the socket never connects, a JS generator drives the
+- `web/app.js` has a hook: if the socket never connects, a JS generator drives the
   same component handlers.
 
 ## What sim must cover (from the spec)

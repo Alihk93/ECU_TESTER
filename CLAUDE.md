@@ -56,7 +56,8 @@ These are settled and carried forward from S-ECU unless a decision below reopens
   - **Acquisition task pinned to core 1** — ADC oneshot + averaging, GPIO/timer
     edge capture, waveform ring buffers. Kept off the Wi-Fi core.
   - **Network/telemetry task on core 0** — packs frames, broadcasts to every live
-    client via `httpd_get_client_list()` + `httpd_queue_work()`.
+    client via `httpd_get_client_list()` + non-blocking `httpd_ws_send_frame_async()`
+    (writability-gated per client — see "Broadcast back-pressure" in §8).
 - **Lock-free shared state:** length-1 queue with `xQueueOverwrite` (producer) /
   `xQueuePeek` (consumer) — always-latest snapshot, no mutex. Waveforms use a
   separate SPSC ring buffer (see ARCHITECTURE.md).
@@ -156,11 +157,13 @@ ECU_TESTER/
 │               └── protocol.h       packed structs + CRC — firmware side of the contract
 ├── web/                   local dashboard (served from LittleFS)
 │   ├── index.html         landscape/fullscreen shell
-│   ├── css/style.css
+│   ├── app.js             view layer + public ECU API
+│   ├── style.css
 │   ├── js/protocol.js     DataView decoder — web side of the contract
 │   ├── js/websocket.js    connection management
-│   ├── js/app.js          bootstrap + component wiring
-│   └── assets/            SVG art, photo(s)
+│   ├── js/live.js         decoded frames -> ECU API (coalesced, rAF-paced)
+│   ├── js/diag.js         FPS/WS/age corner meter
+│   └── assets/            fonts + PNG art
 └── hardware/
     └── README.md          KiCad structure, signal inventory, front-end requirements
 ```

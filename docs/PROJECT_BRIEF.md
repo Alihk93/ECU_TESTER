@@ -40,7 +40,8 @@ controls exist only in sim mode).
 - **`esp_http_server` serves UI + hosts the WebSocket** (`CONFIG_HTTPD_WS_SUPPORT=y`,
   `.is_websocket=true`). No standalone ws component.
 - **Dual-core FreeRTOS:** acq_task pinned core 1 (ADC/GPIO/waveform), net_task
-  core 0 (packs frames, `httpd_get_client_list()` + `httpd_queue_work()`).
+  core 0 (packs frames, `httpd_get_client_list()` + non-blocking
+  `httpd_ws_send_frame_async()`).
   Lock-free length-1 queue (`xQueueOverwrite`/`xQueuePeek`) for latest snapshot.
 - **Two-tier data path:** acquisition fast on-device; wire at display rate —
   TELEMETRY ~30 Hz, WAVEFORM as edge-lists. Coil/injector firing bits **latched
