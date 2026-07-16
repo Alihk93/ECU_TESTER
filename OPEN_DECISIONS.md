@@ -144,6 +144,29 @@ port next. Open sub-items: kiosk/autostart mechanism, TV 1080p-UI confirmation
 
 ---
 
+## Punchlist — open work (all gating decisions D0–D9 resolved)
+
+Mirrors the ECU_TESTER project board. These are execution items, not decisions.
+
+1. **KiCad front-end board (D4)** — dividers/clamps/buffers, ADS1115, MCP23017,
+   74HC165, MAX9926, Hall clamps, TVS. Not started; **blocks all real-driver work.**
+   Part selection + per-signal conditioning already specified in `hardware/README.md`.
+2. **Real acquisition drivers** — `i2c_bus` + `ads1115` + `mcp23017`, `hc165`
+   shift-chain reader, `ckp_capture` (RMT/GPTimer, 60-2 decode + RPM). Replace the
+   `acq_task`/`net_task` sim generators field-by-field. Blocked on item 1.
+3. **App/browser → device COMMAND channel** — `ws_handler` only completes the WS
+   handshake; parse COMMAND (0x80)/SUBSCRIBE (0x81) and reply ACK (0x8F)
+   (`docs/PROTOCOL.md §5`). Nothing sends commands from either client yet.
+4. **Verify Android app on a real Android TV vs the ESP32** (`10.10.10.10`) — the
+   remaining physical-hardware step for D9 (validated so far on a phone + sim over
+   USB). Also reboot-test kiosk autostart; optional `dpm set-device-owner` lock.
+
+**Minor / deferred (from the 2026-07-16 code review):**
+- Concurrent-write race on WS sockets — `net_task` and the httpd task can both
+  `send()` one fd; latent, only bites if client WS pings get enabled later.
+- `ws_broadcast` strike counter inherits across fd reuse — cosmetic, self-healing
+  (a recycled fd can be evicted early). Clear `strikes[fd]` on WS handshake to fix.
+
 ## Resolved / assumptions currently baked into the scaffold
 - ESP32-S3-WROOM-1 **N16R8**, ESP-IDF **5.5.x**. 🟢
 - SoftAP + `esp_http_server` WebSocket, dual-core, ADC1-only, lock-free length-1 queue. 🟢
