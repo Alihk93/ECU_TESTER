@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "516b6fe · fix(android): re-flash held firing bit so sparks don't freeze at high RPM",
-  "lastCommitDate": "2026-07-16T08:42:01+03:00",
+  "lastCommit": "edd2eca · docs: add open-work punchlist + issue-creation helper",
+  "lastCommitDate": "2026-07-16T15:10:02+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-16T05:42:23.053552561Z"
+  "lastSync": "2026-07-16T12:10:17.101533113Z"
 }
