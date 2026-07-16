@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "ddaba68 · polish(android): both fans in one outline box, RPM value lower",
-  "lastCommitDate": "2026-07-14T16:45:35+03:00",
+  "lastCommit": "a995d4e · docs: correct web paths and the net_task broadcast API",
+  "lastCommitDate": "2026-07-16T08:29:17+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-14T13:45:35.989679962Z"
+  "lastSync": "2026-07-16T05:29:37.847599731Z"
 }
