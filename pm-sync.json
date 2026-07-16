@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "a995d4e · docs: correct web paths and the net_task broadcast API",
-  "lastCommitDate": "2026-07-16T08:29:17+03:00",
+  "lastCommit": "516b6fe · fix(android): re-flash held firing bit so sparks don't freeze at high RPM",
+  "lastCommitDate": "2026-07-16T08:42:01+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-16T05:29:37.847599731Z"
+  "lastSync": "2026-07-16T05:42:23.053552561Z"
 }
