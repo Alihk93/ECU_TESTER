@@ -57,9 +57,13 @@
         }
       }
       pending = d;
-    } else if (frame.type === "waveform" && frame.data.mode === 1) {
-      ECU.feedWaveform(frame.data.channel, frame.data);
     }
+    // WAVEFORM frames are counted (stats.msgs++) but NOT forwarded: the scope is
+    // a parametric standing display and protocol.js deliberately bails out of a
+    // WAVEFORM frame before decoding its payload (only the mode byte survives), so
+    // there is no channel/edge data here to plot. To actually plot waveforms,
+    // restore full decodeWaveform() in protocol.js AND a real ECU.feedWaveform() —
+    // as a matched pair — then re-add the forwarding here.
   }
 
   // rAF-paced (web/README.md rule): rAF self-throttles to what the device can

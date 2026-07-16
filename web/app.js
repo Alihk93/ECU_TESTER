@@ -328,8 +328,9 @@
 
   function updateScopeColor() { drawScope(); }
 
-  /* WAVEFORM frames still arrive (js/live.js) but aren't plotted — the scope is a
-     clean parametric standing display now. No-op keeps the ECU.feedWaveform contract. */
+  /* WAVEFORM frames arrive but are not plotted — the scope is a clean parametric
+     standing display now, so js/live.js no longer forwards them here. Kept as a
+     no-op API hook for when waveform plotting is restored (see js/live.js). */
   function feedWaveform() {}
 
   /* ================= Output driver banks ================= */
