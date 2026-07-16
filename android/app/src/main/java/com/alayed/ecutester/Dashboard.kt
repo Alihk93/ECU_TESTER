@@ -309,15 +309,21 @@ class Dashboard(private val root: View) {
         Keyframe.ofFloat(1f, 0f),
     )
 
-    /** Fire a single flash on each channel's rising edge (fired-since-last-frame).
-     *  One spark per firing event; faster (shorter) flash as RPM climbs. */
+    /** Flash on each channel's rising edge, and re-flash while the bit stays set.
+     *  The firing bit is latched "fired since last frame"; at idle it toggles
+     *  frame-to-frame so the rising edge alone drives one spark per firing. Above
+     *  ~2800 rpm a cylinder fires every frame, so the bit is HELD set and the edge
+     *  never recurs — without the held-retrigger the spark would fire once then
+     *  freeze. Re-flashing when the bit is held AND the prior flash has ended keeps
+     *  the flash rate tracking the firing rate up to the frame cap, and never
+     *  restarts a flash mid-play (so idle looks exactly as before). */
     private fun setBankActivity(kind: String, byteVal: Int) {
         val arr = banks[kind] ?: return
         val dur = (420L - (currentRpm / 8000f * 200L).toLong()).coerceIn(200L, 420L)
         for (i in 0 until 8) {
             val active = (byteVal ushr i) and 1 == 1
             val b = arr[i]
-            if (active && !b.lastActive) {
+            if (active && (!b.lastActive || b.anim?.isRunning != true)) {
                 b.anim?.cancel()
                 b.overlay.alpha = 0f
                 val pvh = PropertyValuesHolder.ofKeyframe("alpha", *(if (b.spark) sparkKf else sprayKf))
