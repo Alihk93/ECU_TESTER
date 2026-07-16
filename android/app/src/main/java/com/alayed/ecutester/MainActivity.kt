@@ -102,6 +102,22 @@ class MainActivity : AppCompatActivity() {
             override fun run() { dashboard.tickUptime(); ui.postDelayed(this, 1000) }
         })
 
+        // Stale-stream watchdog (parity with web live.js): TV Wi-Fi power save /
+        // an AP reboot can kill the TCP stream with NO close event — OkHttp then
+        // never fires onFailure (pings are off) and the dashboard would freeze at
+        // the last frame still showing CONNECTED. If telemetry goes stale while
+        // the link claims to be up, cycle the socket; backoff reconnect takes over.
+        ui.postDelayed(object : Runnable {
+            override fun run() {
+                if (connected && mapper.lastTelemetryMs != 0L &&
+                    System.currentTimeMillis() - mapper.lastTelemetryMs > 2500) {
+                    mapper.markStalled()
+                    socket.cycle()
+                }
+                ui.postDelayed(this, 1000)
+            }
+        }, 1000)
+
         // FPS via the real painted cadence
         Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {

@@ -15,6 +15,7 @@ import android.widget.TextView
 import com.alayed.ecutester.ui.MiniGaugeView
 import com.alayed.ecutester.ui.RpmDialView
 import com.alayed.ecutester.ui.ScopeView
+import java.util.Locale
 
 /**
  * View controller for the cluster — the native equivalent of web/app.js. Holds the
@@ -335,7 +336,9 @@ class Dashboard(private val root: View) {
         currentRpm = t.rpm
         dial.setRpm(t.rpm)
         scope.setRpm(t.rpm)
-        val v = "%.2f".format(t.ecuV / 1000.0)
+        // Locale.US: an Arabic-locale TV renders %f as Eastern-Arabic digits,
+        // which the DSEG7 7-seg font doesn't have (tofu).
+        val v = "%.2f".format(Locale.US, t.ecuV / 1000.0)
         if (v != lastV) { lastV = v; voltage.text = v }
 
         gauges["MAF"]?.setVolts(t.maf / 1000f)
@@ -417,6 +420,6 @@ class Dashboard(private val root: View) {
     fun tickUptime() {
         uptimeSec++
         val h = (uptimeSec / 3600) % 100; val m = (uptimeSec / 60) % 60; val s = uptimeSec % 60
-        uptime.text = "%02d:%02d:%02d".format(h, m, s)
+        uptime.text = "%02d:%02d:%02d".format(Locale.US, h, m, s)
     }
 }

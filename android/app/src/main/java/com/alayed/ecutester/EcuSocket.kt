@@ -60,6 +60,10 @@ class EcuSocket(
 
     fun send(bytes: ByteArray): Boolean = ws?.send(ByteString.of(*bytes)) ?: false
 
+    /** Force a reconnect cycle (stale-stream watchdog): cancel the current socket;
+     *  onFailure fires and the normal backoff reconnect takes over. */
+    fun cycle() { ws?.cancel() }
+
     fun close() {
         closed = true
         ws?.close(1000, null)

@@ -9,7 +9,8 @@ import android.view.Choreographer
  *   - COALESCE bursts (Wi-Fi power-save delivers frames in clumps): keep only the
  *     latest telemetry and apply it once per painted frame (Choreographer), never
  *     faster than the display paints.
- *   - a stale-stream WATCHDOG belongs here too (added with the full UI).
+ *   - the stale-stream WATCHDOG (live.js parity) ticks in MainActivity and uses
+ *     [lastTelemetryMs] / [markStalled] from here.
  *
  * [onTelemetry] runs on the main thread, in a frame callback.
  */
@@ -20,6 +21,10 @@ class LiveMapper(private val onTelemetry: (Protocol.Telemetry) -> Unit) {
 
     var lastTelemetryMs: Long = 0L; private set
     var frames: Int = 0; private set
+
+    /** One shot per stall (watchdog in MainActivity): zeroed so the watchdog
+     *  doesn't re-fire until the next real frame arrives — mirrors live.js. */
+    fun markStalled() { lastTelemetryMs = 0L }
 
     /** Feed one decoded frame (already on the main thread via EcuSocket). */
     fun onFrame(frame: Protocol.Frame) {

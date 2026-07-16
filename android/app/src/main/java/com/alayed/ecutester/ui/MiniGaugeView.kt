@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.DecelerateInterpolator
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -96,7 +97,8 @@ class MiniGaugeView @JvmOverloads constructor(
         namePaint.textSize = 18f
         canvas.drawText(label, cx, cy - 8f, namePaint)
         valuePaint.textSize = 26f
-        canvas.drawText("%.2f".format(displayed), cx, cy + 40f, valuePaint)
+        // Locale.US: Arabic-locale TVs render %f as Eastern-Arabic digits (see Dashboard.kt)
+        canvas.drawText("%.2f".format(Locale.US, displayed), cx, cy + 40f, valuePaint)
 
         // needle at the current voltage angle
         val a = Math.toRadians((start - (displayed / 5f) * span).toDouble())
