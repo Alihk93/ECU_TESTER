@@ -284,6 +284,11 @@ static void ws_broadcast(const uint8_t *frame, size_t len)
                   httpd_ws_send_frame_async(s_httpd, fd, &f) == ESP_OK;
         if (ok) {
             strikes[fd] = 0;
+            /* WS clients never send after the handshake, so httpd's LRU counter
+             * (advanced on RECEIVED traffic) marks them the eviction victim.
+             * Touch it on every delivered frame, or a second viewer's burst of
+             * asset requests purges the first viewer's live stream. */
+            httpd_sess_update_lru_counter(s_httpd, fd);
         } else if (++strikes[fd] >= WS_EVICT_STRIKES) {
             ESP_LOGW(TAG, "WS fd=%d stalled >2s, evicting", fd);
             strikes[fd] = 0;
@@ -295,7 +300,8 @@ static void ws_broadcast(const uint8_t *frame, size_t len)
 /* =============================================================================
  *  acq_task (core 1) — SIMULATION MODE (CLAUDE.md §1: full sim with no hardware).
  *  Generates the slow signals — RPM, the four analog sensors (as raw mV matching
- *  the web transfer curves in theme.js), status lines and the IAC stepper phase —
+ *  the web dashboard's display scaling in live.js), status lines and the IAC
+ *  stepper phase —
  *  and publishes them as the latest snapshot. The fast, angle-synced signals
  *  (coil/injector firing + CKP/CMP waveform) are produced in net_task from the
  *  same RPM, so a coil flash lines up with the crank trace on the scope.
@@ -322,7 +328,7 @@ static void acq_task(void *arg)
         double rev = 0.5 - 0.5 * cos(ts * 0.08 * 2 * M_PI);   /* 0..1 load */
         double rpm = 820.0 + 120.0 * lfo + 2600.0 * rev * rev;
 
-        /* Analog engineering values, then back to raw mV per theme.js curves. */
+        /* Analog engineering values, then back to raw mV (live.js shows V = mV/1000). */
         double map_kpa = 30.0 + rev * 68.0;                   /* vacuum -> load  */
         double maf_gs  = 4.0 + rev * 190.0 + (rpm - 820) * 0.01;
         double iat_c   = 28.0 + 4.0 * sin(ts * 0.05 * 2 * M_PI);
@@ -488,7 +494,13 @@ static void net_task(void *arg)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
+    esp_err_t nvs = nvs_flash_init();
+    if (nvs == ESP_ERR_NVS_NO_FREE_PAGES || nvs == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        /* corrupt page or NVS-layout bump: erase once and retry, else boot-loop */
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs);
     s_state_q = xQueueCreate(1, sizeof(ecu_telemetry_t));
 
     wifi_softap_start();
