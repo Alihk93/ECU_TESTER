@@ -41,6 +41,38 @@ cd android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Device compatibility — one universal APK
+
+**The same APK runs on Android TV, phone, and tablet — no per-form-factor build.**
+This is deliberate, not incidental:
+
+- Both `touchscreen` and `leanback` are declared `uses-feature … required="false"`
+  in the manifest — the first admits TVs (no touchscreen), the second admits
+  phones/tablets (no TV hardware). That pairing is what lets one APK install on all.
+- Three launcher intents: `LAUNCHER` (phone/tablet drawer), `LEANBACK_LAUNCHER`
+  (TV Apps row), `HOME`.
+- No native code (pure Kotlin + OkHttp) → no ABI split; runs on 32-bit `armeabi-v7a`
+  and 64-bit alike.
+- `StageLayout` scales the fixed 1920×1080 cluster by `min(w/1920, h/1080)` and
+  centers it, so it letterboxes to any screen size/aspect without a redesign.
+- `minSdk 24` (Android 7) covers all three.
+
+Proven on a Huawei P30 **phone** (dev) and a G08 4K **Android TV** (2026-07-19).
+
+Caveats (cosmetic, not blockers — do **not** warrant a separate build):
+
+- **Landscape-locked** (`screenOrientation="landscape"`): a phone/tablet held in
+  portrait shows the landscape cluster rotated to fill — correct for a dashboard,
+  but it is not a portrait phone UI.
+- **Letterbox bars** on non-16:9 screens (tall phones get side bars); the cluster
+  itself stays pixel-correct.
+- The app claims `CATEGORY_HOME` and auto-starts on boot (appliance behavior). On a
+  dedicated TV that is the point; on a **personal** phone/tablet it is mildly
+  intrusive (can offer to be the home launcher, starts on boot). Harmless — the
+  device-owner lock stays a no-op unless explicitly set. If a "clean" phone/tablet
+  demo build is ever wanted, drop the `HOME` intent + `BootReceiver` as a build
+  flavor — not a separate codebase.
+
 ## Run against the sim (no hardware)
 
 `WS_URL` in `MainActivity.kt` defaults to the device (`ws://10.10.10.10/ws`).
