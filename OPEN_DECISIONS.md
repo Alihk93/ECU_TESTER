@@ -157,15 +157,27 @@ Mirrors the ECU_TESTER project board. These are execution items, not decisions.
 3. **App/browser → device COMMAND channel** — `ws_handler` only completes the WS
    handshake; parse COMMAND (0x80)/SUBSCRIBE (0x81) and reply ACK (0x8F)
    (`docs/PROTOCOL.md §5`). Nothing sends commands from either client yet.
-4. **Verify Android app on a real Android TV vs the ESP32** (`10.10.10.10`) — the
-   remaining physical-hardware step for D9 (validated so far on a phone + sim over
-   USB). Also reboot-test kiosk autostart; optional `dpm set-device-owner` lock.
+4. **Verify Android app on a real Android TV vs the ESP32** — **mostly DONE
+   (2026-07-19).** On a G08 4K TV (Android 12): APK installs, reports a 1920×1080 UI
+   override (stage scales 1:1), links to `10.10.10.10` over the `ECU_TESTER` AP, renders
+   live at ~51 fps, stable 5+ min with zero WS evictions. Watchdog (review finding #1)
+   validated: DISCONNECTED in 3 s on device power loss, clean freeze, auto-recovers. **Only
+   the kiosk-reboot autostart sub-item is still unverified** (reboot TV → app auto-launch;
+   optional `dpm set-device-owner` lock).
 
 **Minor / deferred (from the 2026-07-16 code review):**
 - Concurrent-write race on WS sockets — `net_task` and the httpd task can both
   `send()` one fd; latent, only bites if client WS pings get enabled later.
 - `ws_broadcast` strike counter inherits across fd reuse — cosmetic, self-healing
   (a recycled fd can be evicted early). Clear `strikes[fd]` on WS handshake to fix.
+
+**Minor / deferred (from the 2026-07-19 on-TV bench):**
+- Android reconnect is slow — ~22 s from Wi-Fi-back to WS reconnect after a device
+  outage (recovery is automatic, but slower than the 5 s backoff cap implies; likely
+  Android deferring sockets on a no-internet network + grown backoff). Reset the
+  EcuSocket backoff harder on network-available.
+- ScopeView keeps scrolling while DISCONNECTED — cosmetic; arguably freeze it to
+  signal "no data" (it runs off the last RPM, independent of telemetry).
 
 ## Resolved / assumptions currently baked into the scaffold
 - ESP32-S3-WROOM-1 **N16R8**, ESP-IDF **5.5.x**. 🟢

@@ -118,8 +118,12 @@ All gating questions D0–D8 answered **2026-07-02**:
   the TV browser's software-render FPS ceiling. Firmware/protocol/assets unchanged; the
   app is another WS client on `/ws` (`Protocol.kt` = 4th contract mirror). `web/` kept as
   fallback, not deprecated. M1 slice (RPM needle) built + **verified on-device 2026-07-14**
-  (60 fps + CRC-gate). See [`docs/ANDROID_MIGRATION.md`](docs/ANDROID_MIGRATION.md); build
-  env in `android/README.md`.
+  (60 fps + CRC-gate). **Full cluster verified on a real Android TV vs the real ESP32
+  2026-07-19** — G08 4K panel (Android 12) reports a 1920×1080 UI override so the stage
+  scales 1:1; app links to `10.10.10.10` over the `ECU_TESTER` AP, ~51 fps live, stable
+  5+ min; watchdog flips DISCONNECTED in 3 s on device loss and auto-recovers. Only the
+  kiosk-reboot autostart sub-item is unverified. See
+  [`docs/ANDROID_MIGRATION.md`](docs/ANDROID_MIGRATION.md); build env in `android/README.md`.
 
 **Next build targets (for Claude Code):** `i2c_bus` + `ads1115` + `mcp23017` drivers,
 `hc165` shift-chain reader, `ckp_capture` (RMT/GPTimer) with 60-2 decode + RPM,
