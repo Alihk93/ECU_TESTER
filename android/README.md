@@ -73,6 +73,27 @@ Caveats (cosmetic, not blockers — do **not** warrant a separate build):
   demo build is ever wanted, drop the `HOME` intent + `BootReceiver` as a build
   flavor — not a separate codebase.
 
+## Intro splash (cinematic)
+
+`IntroActivity` is the cold-launch entry (app icon / TV Apps row / boot); it plays a
+~6 s cinematic AL-AYED intro, then **ENTER** hands off to `MainActivity` (the dashboard).
+`CATEGORY_HOME` stays on MainActivity, so a Home-press returns to the dashboard, not a
+replayed intro. Native Canvas port of a Claude Design handoff (source under
+`../docs/design-refs/ecu-intro/`).
+
+- `ui/IntroView.kt` — 1920×1080 stage, 5 scenes (Power On → Cars → Emblem → Marques →
+  Showtime) revealing feathered-ellipse crops of one composite
+  (`res/drawable-nodpi/intro_bg.webp`, a 183 KB re-encode of the 5.8 MB source). A global
+  `SPEED` (1.6×) time-scale sets the ~6 s runtime; tap/DPAD-center skips to the end.
+- `ui/IntroAudio.kt` — procedural sound bed (ambient/whoosh/thump/blips/impact/ripple/
+  chime/click) rendered to PCM and played via AudioTrack, cued per scene.
+- End state: TV-remote + touch nav; **ENTER** → dashboard, **SETTING** → change-password
+  modal (SharedPreferences, default `00000000`).
+
+> Deliberately a **separate top-level activity**, not launched from
+> `MainActivity.onCreate` — doing that tangled the lifecycle and starved the intro's
+> layout/draw. Plays on every cold start (skippable); change if once-only is wanted.
+
 ## Run against the sim (no hardware)
 
 `WS_URL` in `MainActivity.kt` defaults to the device (`ws://10.10.10.10/ws`).
