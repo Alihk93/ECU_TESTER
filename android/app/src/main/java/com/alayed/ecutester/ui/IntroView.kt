@@ -140,8 +140,14 @@ class IntroView @JvmOverloads constructor(
     private val carsR = Rgn(0.5f, 0.48f, 0.37f, 0.17f, 0.78f)
     private val plateR = Rgn(0.5f, 0.155f, 0.31f, 0.16f, 0.8f)
     private val textR = Rgn(0.487f, 0.895f, 0.29f, 0.08f)
-    private val setR = Rgn(0.116f, 0.926f, 0.10f, 0.062f)
-    private val entR = Rgn(0.892f, 0.926f, 0.105f, 0.062f)
+    // reveal regions centered on the actual buttons (generous rx/ry so the feathered
+    // mask covers the whole button, not just its middle)
+    private val setR = Rgn(0.106f, 0.925f, 0.10f, 0.062f)
+    private val entR = Rgn(0.894f, 0.925f, 0.105f, 0.062f)
+    // tight button bounds (l,t,r,b fractions), measured from the art — for the focus
+    // ring, which must hug the baked button, not the wider reveal ellipse.
+    private val setBtnBox = floatArrayOf(0.023f, 0.879f, 0.189f, 0.971f)
+    private val entBtnBox = floatArrayOf(0.817f, 0.879f, 0.971f, 0.971f)
     private val logos = Array(11) { i -> Rgn(0.085f + 0.0888f * i, 0.658f, 0.048f, 0.056f, 0.7f) }
 
     /* ---------------- easing ---------------- */
@@ -221,7 +227,7 @@ class IntroView @JvmOverloads constructor(
         c: Canvas, bg: Float, circuits: Float = 0f, groundGlow: Float = 0f,
         cars: RP? = null, plate: RP? = null, streak: Float = 0f,
         logoFn: ((Int) -> RP)? = null, text: RP? = null, setBtn: RP? = null, entBtn: RP? = null,
-        full: Float = 0f, gleam: Float = 0f, flash: Float = 0f, vig: Float = 0.85f, bars: Float = 0.12f,
+        full: Float = 0f, gleam: Float = 0f, flash: Float = 0f, vig: Float = 0.85f, bars: Float = 0.04f,
     ) {
         c.drawColor(Color.rgb(2, 4, 7))
         region(c, Rgn(0.5f, 0.5f, 0f, 0f), RP(bright = bg))                  // bg (full, dark)
@@ -315,7 +321,7 @@ class IntroView @JvmOverloads constructor(
         val ot = seg(t, 0.05f, 0.6f, outCubic); val ob = seg(t, 0.25f, 0.9f, outCubic)
         val full = seg(t, 0.55f, 1.2f)
         frame(c, bg = 0.12f, circuits = 0.9f, groundGlow = 0.5f * (1f - full),
-            bars = 0.12f * (1f - seg(t, 0.1f, 0.95f)), vig = 0.85f * (1f - seg(t, 0.2f, 1.0f)),
+            bars = 0.04f * (1f - seg(t, 0.1f, 0.95f)), vig = 0.85f * (1f - seg(t, 0.2f, 1.0f)),
             cars = RP(), plate = RP(), logoFn = { RP(opacity = 1f) },
             text = RP(opacity = ot, dy = 26f * (1f - ot)),
             setBtn = RP(opacity = ob, dx = -90f * (1f - ob)), entBtn = RP(opacity = ob, dx = 90f * (1f - ob)),
@@ -326,17 +332,16 @@ class IntroView @JvmOverloads constructor(
 
     /* ---------------- interactive end state: pulsing focus ring ---------------- */
     private fun focusRing(c: Canvas, tGlobal: Float) {
-        val r = if (focus == "setting") setR else entR
-        val left = (r.cx - r.rx * 0.82f) * W; val top = (r.cy - r.ry * 0.68f) * H
-        val w = r.rx * 1.64f * W; val h = r.ry * 1.36f * H
+        val b = if (focus == "setting") setBtnBox else entBtnBox
+        val rect = RectF(b[0] * W, b[1] * H, b[2] * W, b[3] * H)
         val pulse = 0.5f + 0.5f * sin(tGlobal * 2f * PI.toFloat() / 1.6f)
         fx.reset(); fx.isAntiAlias = true; fx.style = Paint.Style.STROKE; fx.strokeWidth = 3f
         fx.color = Color.argb((180 + 60 * pulse).toInt(), 70, 230, 160)
         fx.maskFilter = android.graphics.BlurMaskFilter(10f + 14f * pulse, android.graphics.BlurMaskFilter.Blur.NORMAL)
-        c.drawRoundRect(RectF(left, top, left + w, top + h), 26f, 26f, fx)
+        c.drawRoundRect(rect, 24f, 24f, fx)
         fx.maskFilter = null
         fx.color = Color.argb(220, 70, 230, 160)
-        c.drawRoundRect(RectF(left, top, left + w, top + h), 26f, 26f, fx)
+        c.drawRoundRect(rect, 24f, 24f, fx)
         fx.style = Paint.Style.FILL
     }
 
