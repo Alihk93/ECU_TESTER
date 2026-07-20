@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "af986b9 · docs: add HANDOVER.md — paste-ready session primer",
-  "lastCommitDate": "2026-07-20T09:58:29+03:00",
+  "lastCommit": "4171cb4 · feat(firmware): browser→server COMMAND/SUBSCRIBE channel + ACK",
+  "lastCommitDate": "2026-07-20T10:41:20+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-20T06:58:29.518661805Z"
+  "lastSync": "2026-07-20T07:41:29.003253758Z"
 }
