@@ -313,8 +313,19 @@ Browser-side, `live.js` coalesces bursts (latest frame wins, firing bits OR-latc
 and applies to the DOM rAF-paced (80 ms floor — ≤12.5 Hz, and never faster than the
 display actually paints).
 
+**Browser→server COMMAND/SUBSCRIBE — DONE (2026-07-20).** `ws_handler` now receives
+B→S frames, validates magic/version/length/CRC, dispatches `COMMAND` (0x80) /
+`SUBSCRIBE` (0x81) and replies `ACK` (0x8F). COMMAND drives the sim override state
+(RPM/analog-mV/IAC forced; negative value releases to auto; coil/inj/status held
+toggles); SUBSCRIBE sets the telemetry rate (1–60 Hz) and flips WAVEFORM streaming
+on/off at runtime (`s_wave_stream`). Mirrored in `tools/sim_server.py`; verified
+hardware-free with `tools/ws_cmd_test.py` (6/6 checks). Firmware builds clean for
+esp32s3 (~73% app free). No client UI sends commands yet (SimControls was removed);
+the receive path is ready for one. See docs/PROTOCOL.md §5.1.
+
 **Still open (not a scaffold gap — real work):** the *real* acquisition drivers (ADS1115
 precision analog, MCP23017 status, 74HC165 coil/injector activity, CKP/CMP capture via
 RMT/GPTimer with 60-2 decode) that replace the sim generators field-by-field at the
-bench, and the browser→server COMMAND handler (`ws_handler` currently only accepts the
-handshake; the dashboard sends no commands since SimControls was removed).
+bench; a dashboard/app control surface that actually sends COMMAND/SUBSCRIBE; and — for
+the intro's change-password feature to mean anything — a new AP-password `cmd_id` backed
+by NVS credentials + reboot (today the modal only writes SharedPreferences).

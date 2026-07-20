@@ -19,6 +19,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -41,6 +42,36 @@ static const char *TAG = "ecu_tester";
 /* ---- lock-free latest-state snapshot (carried from S-ECU) ------------------- */
 static QueueHandle_t s_state_q;      /* length-1, xQueueOverwrite / xQueuePeek */
 static httpd_handle_t s_httpd;
+
+/* =============================================================================
+ *  Runtime control state — set by the browser->server command channel
+ *  (docs/PROTOCOL.md §5), read by acq_task (core 1) / net_task (core 0). Each is
+ *  a naturally-aligned 32-bit scalar, so plain volatile reads/writes are atomic
+ *  on the ESP32 (no mutex; same lock-free discipline as the state snapshot).
+ *
+ *  COMMAND overrides drive the SIMULATION (D2 = monitor-only; manual controls
+ *  exist only in sim). A negative override releases that field back to AUTO — the
+ *  free-running generator — since docs/PROTOCOL.md §5 has no explicit "release".
+ * ===========================================================================*/
+#define OVR_AUTO   INT32_MIN                 /* "no override — run the generator" */
+static volatile int32_t  s_ovr_rpm   = OVR_AUTO;
+static volatile int32_t  s_ovr_maf   = OVR_AUTO;   /* mV at the ECU pin (§3.1) */
+static volatile int32_t  s_ovr_map   = OVR_AUTO;   /* mV */
+static volatile int32_t  s_ovr_iat   = OVR_AUTO;   /* mV */
+static volatile int32_t  s_ovr_ecu_v = OVR_AUTO;   /* mV */
+static volatile int32_t  s_ovr_iac   = OVR_AUTO;   /* phase nibble, or AUTO */
+static volatile uint32_t s_force_coil = 0;         /* bits OR-ed into fired coils */
+static volatile uint32_t s_force_inj  = 0;         /* bits OR-ed into fired injectors */
+static volatile uint32_t s_status_set = 0;         /* status bits forced ON */
+static volatile uint32_t s_status_clr = 0;         /* status bits forced OFF */
+static volatile int32_t  s_telemetry_hz = TELEMETRY_HZ_DEFAULT;  /* SUBSCRIBE rate */
+
+/* WAVEFORM edge-list streaming — DEFAULT OFF (2026-07-12 FPS pass). The dashboard
+ * scope is a parametric standing display and never plots the edge lists, so
+ * streaming them is pure overhead (~60 extra WS frames/s + per-message parse work
+ * on weak TV browsers). A SUBSCRIBE (0x81) with any wave_channels bit set flips
+ * this on at runtime; wire format unchanged (docs/PROTOCOL.md §4). */
+static volatile bool s_wave_stream = false;
 
 /* =============================================================================
  *  Wi-Fi SoftAP (D1: SSID ECU_TESTER / WPA2 00000000 / IP 10.10.10.10).
@@ -126,9 +157,75 @@ static void littlefs_mount(void)
 }
 
 /* =============================================================================
- *  WebSocket handler  — .is_websocket = true. Receives COMMAND/SUBSCRIBE frames
- *  (docs/PROTOCOL.md §5), validates CRC via ecu_crc16_ccitt, applies to sim.
+ *  Browser -> server command channel (docs/PROTOCOL.md §5).
+ *  ACK status codes are implementation-defined (§5: 0 = ok, non-zero = reason).
  * ===========================================================================*/
+enum { ACK_OK = 0, ACK_ERR_LEN = 1, ACK_ERR_CRC = 2, ACK_ERR_TYPE = 3 };
+
+/* Apply one COMMAND to the sim override state. Returns an ACK status. */
+static uint8_t apply_command(const ecu_command_t *c)
+{
+    switch (c->cmd_id) {
+        case 0x01: s_ovr_maf   = (c->value < 0) ? OVR_AUTO : c->value; break;   /* MAF mV */
+        case 0x02: s_ovr_map   = (c->value < 0) ? OVR_AUTO : c->value; break;   /* MAP mV */
+        case 0x03: s_ovr_iat   = (c->value < 0) ? OVR_AUTO : c->value; break;   /* IAT mV */
+        case 0x04: s_ovr_ecu_v = (c->value < 0) ? OVR_AUTO : c->value; break;   /* ECU V mV */
+        case 0x05: break;    /* ECU current: no telemetry v1 field — accepted, no effect */
+        case 0x10: if (c->channel < 8) {                                        /* coil toggle */
+                       uint32_t m = 1u << c->channel;
+                       if (c->value) s_force_coil |= m; else s_force_coil &= ~m;
+                   } break;
+        case 0x11: if (c->channel < 8) {                                        /* injector toggle */
+                       uint32_t m = 1u << c->channel;
+                       if (c->value) s_force_inj |= m; else s_force_inj &= ~m;
+                   } break;
+        case 0x20: if (c->channel < 16) {                                       /* status bit */
+                       uint32_t m = 1u << c->channel;
+                       if (c->value) { s_status_set |= m; s_status_clr &= ~m; }
+                       else          { s_status_clr |= m; s_status_set &= ~m; }
+                   } break;
+        case 0x30: s_ovr_iac = (c->value < 0) ? OVR_AUTO : (c->value & 0x0F); break;  /* IAC */
+        case 0x40: s_ovr_rpm = (c->value < 0) ? OVR_AUTO : c->value; break;     /* RPM (sim) */
+        default:   return ACK_ERR_TYPE;
+    }
+    return ACK_OK;
+}
+
+/* Apply one SUBSCRIBE: telemetry rate + waveform streaming on/off. */
+static uint8_t apply_subscribe(const ecu_subscribe_t *s)
+{
+    if (s->telemetry_hz) {
+        int hz = s->telemetry_hz;
+        s_telemetry_hz = (hz > 60) ? 60 : hz;      /* clamp; net_task floors at 1 */
+    }
+    s_wave_stream = (s->wave_channels != 0);        /* any channel selected -> stream edges */
+    return ACK_OK;
+}
+
+/* Send an ACK (0x8F) on the requesting socket. */
+static void send_ack(httpd_req_t *req, uint16_t acked_seq, uint8_t status)
+{
+    uint8_t buf[sizeof(ecu_frame_hdr_t) + sizeof(ecu_ack_t) + 2];
+    ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)buf;
+    h->magic0 = ECU_PROTO_MAGIC0;  h->magic1 = ECU_PROTO_MAGIC1;
+    h->version = ECU_PROTO_VERSION; h->msg_type = MSG_ACK;
+    h->seq = 0;                     h->payload_len = sizeof(ecu_ack_t);
+    ecu_ack_t *a = (ecu_ack_t *)(buf + sizeof(*h));
+    a->acked_seq = acked_seq;  a->status = status;
+    size_t body = sizeof(*h) + sizeof(ecu_ack_t);
+    uint16_t crc = ecu_crc16_ccitt(buf, body);
+    memcpy(buf + body, &crc, sizeof(crc));
+    httpd_ws_frame_t f = { .type = HTTPD_WS_TYPE_BINARY, .payload = buf, .len = body + sizeof(crc) };
+    httpd_ws_send_frame(req, &f);
+}
+
+/* =============================================================================
+ *  WebSocket handler  — .is_websocket = true. On handshake, tunes the socket;
+ *  afterwards receives COMMAND/SUBSCRIBE frames (docs/PROTOCOL.md §5), validates
+ *  magic/version/length/CRC, dispatches to the sim, and replies with an ACK.
+ * ===========================================================================*/
+#define WS_RX_MAX   64   /* B->S frames are tiny: COMMAND=16 B, SUBSCRIBE=15 B total */
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {          /* WS handshake */
@@ -144,8 +241,53 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ESP_LOGI(TAG, "WS client connected fd=%d", fd);
         return ESP_OK;
     }
-    // TODO: httpd_ws_recv_frame() -> verify magic/version/CRC (protocol.h)
-    //       -> dispatch COMMAND (0x80) / SUBSCRIBE (0x81) -> reply ACK (0x8F).
+
+    /* --- receive one B->S frame -------------------------------------------- */
+    httpd_ws_frame_t ws = { .type = HTTPD_WS_TYPE_BINARY };
+    if (httpd_ws_recv_frame(req, &ws, 0) != ESP_OK) return ESP_OK;   /* length probe */
+    if (ws.len == 0) return ESP_OK;
+
+    /* Always consume the payload (even if oversize) so the socket stays framed. */
+    uint8_t  stackbuf[WS_RX_MAX];
+    uint8_t *buf = stackbuf, *heap = NULL;
+    if (ws.len > WS_RX_MAX) {
+        heap = malloc(ws.len);
+        if (!heap) return ESP_OK;
+        buf = heap;
+    }
+    ws.payload = buf;
+    esp_err_t rc = httpd_ws_recv_frame(req, &ws, ws.len);
+
+    if (rc == ESP_OK && ws.len >= 10 && ws.len <= WS_RX_MAX &&
+        buf[0] == ECU_PROTO_MAGIC0 && buf[1] == ECU_PROTO_MAGIC1 &&
+        buf[2] == ECU_PROTO_VERSION) {
+        ecu_frame_hdr_t hdr;
+        memcpy(&hdr, buf, sizeof(hdr));
+        size_t total = 8 + hdr.payload_len + 2;
+        if (total <= ws.len) {                       /* not truncated */
+            uint16_t rx_crc;
+            memcpy(&rx_crc, buf + 8 + hdr.payload_len, sizeof(rx_crc));
+            if (ecu_crc16_ccitt(buf, 8 + hdr.payload_len) != rx_crc) {
+                send_ack(req, hdr.seq, ACK_ERR_CRC);
+            } else {
+                uint8_t status;
+                switch (hdr.msg_type) {
+                    case MSG_COMMAND:
+                        status = (hdr.payload_len == sizeof(ecu_command_t))
+                               ? apply_command((const ecu_command_t *)(buf + 8)) : ACK_ERR_LEN;
+                        break;
+                    case MSG_SUBSCRIBE:
+                        status = (hdr.payload_len == sizeof(ecu_subscribe_t))
+                               ? apply_subscribe((const ecu_subscribe_t *)(buf + 8)) : ACK_ERR_LEN;
+                        break;
+                    default:
+                        status = ACK_ERR_TYPE;
+                }
+                send_ack(req, hdr.seq, status);
+            }
+        }
+    }
+    free(heap);
     return ESP_OK;
 }
 
@@ -354,6 +496,17 @@ static void acq_task(void *arg)
 
         snap.iac = (uint8_t)(1u << ((now / 150000u) % 4u));   /* walking A-B-C-D */
 
+        /* COMMAND overrides (docs/PROTOCOL.md §5): a set field replaces the
+         * generator; AUTO leaves it free-running. Read each volatile once. */
+        int32_t o;
+        if ((o = s_ovr_rpm)   != OVR_AUTO) snap.rpm   = clamp_u16(o, 8000);
+        if ((o = s_ovr_maf)   != OVR_AUTO) snap.maf   = clamp_u16(o, 5000);
+        if ((o = s_ovr_map)   != OVR_AUTO) snap.map   = clamp_u16(o, 5000);
+        if ((o = s_ovr_iat)   != OVR_AUTO) snap.iat   = (int16_t)clamp_u16(o, 5000);
+        if ((o = s_ovr_ecu_v) != OVR_AUTO) snap.ecu_v = clamp_u16(o, 25000);
+        if ((o = s_ovr_iac)   != OVR_AUTO) snap.iac   = (uint8_t)(o & 0x0F);
+        snap.status = (snap.status | (uint16_t)s_status_set) & ~(uint16_t)s_status_clr;
+
         xQueueOverwrite(s_state_q, &snap);        /* always-latest, no mutex */
         vTaskDelay(period);
     }
@@ -366,13 +519,8 @@ static void acq_task(void *arg)
  * ===========================================================================*/
 #define WAVE_MAX_EDGES   256
 
-/* WAVEFORM edge-list streaming — DEFAULT OFF (2026-07-12 FPS pass). The
- * dashboard's scope is a parametric standing display and never plots the edge
- * lists, so streaming them was pure overhead: ~60 extra WS frames/s of Wi-Fi
- * airtime and, worse, per-message parse work on the single-threaded TV
- * browsers (the FPS bottleneck). Wire format unchanged (docs/PROTOCOL.md §4);
- * flip via SUBSCRIBE (0x81) once that handler lands. */
-static bool s_wave_stream = false;
+/* s_wave_stream (SUBSCRIBE-controlled) is declared with the runtime-control state
+ * near the top of the file. */
 
 static const uint8_t s_fire_order[6] = { 0, 4, 2, 5, 1, 3 };  /* 1-5-3-6-2-4 */
 
@@ -414,14 +562,15 @@ static void net_task(void *arg)
     uint16_t seq = 0;
     ecu_telemetry_t snap;
     uint8_t frame[sizeof(ecu_frame_hdr_t) + sizeof(ecu_telemetry_t) + 2];
-    const TickType_t period = pdMS_TO_TICKS(1000 / TELEMETRY_HZ_DEFAULT);
 
     double   crank_deg = 0;              /* absolute integrated crank angle */
     uint32_t last_us   = (uint32_t)esp_timer_get_time();
     long     last_fire = 0;
 
     for (;;) {
-        vTaskDelay(period);
+        /* Telemetry rate is SUBSCRIBE-adjustable (docs/PROTOCOL.md §5); floor at 1 Hz. */
+        int hz = s_telemetry_hz;
+        vTaskDelay(pdMS_TO_TICKS(1000 / (hz < 1 ? 1 : hz)));
         if (xQueuePeek(s_state_q, &snap, portMAX_DELAY) != pdTRUE) continue;
 
         /* --- integrate crank angle over the elapsed interval --------------- */
@@ -471,6 +620,12 @@ static void net_task(void *arg)
         }
         crank_deg = a1;
         last_us   = now;
+
+        /* COMMAND coil/injector toggles (docs/PROTOCOL.md §5): held ON regardless
+         * of firing phase, OR-ed onto the latched activity bits. */
+        snap.coils   |= (uint8_t)s_force_coil;
+        snap.inj_reg |= (uint8_t)s_force_inj;
+        snap.inj_gdi |= (uint8_t)s_force_inj;
 
         /* --- TELEMETRY ---------------------------------------------------- */
         ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)frame;

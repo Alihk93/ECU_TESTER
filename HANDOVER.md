@@ -143,8 +143,12 @@ com.alayed.ecutester/.IntroActivity` → `adb exec-out screencap`.
    `hardware/README.md`.
 2. **Real acquisition drivers** — `i2c_bus`+`ads1115`+`mcp23017`, `hc165` reader,
    `ckp_capture` (RMT/GPTimer, 60-2 decode). Replace the sim generators. Blocked on #1.
-3. **App/browser → device COMMAND channel** — `ws_handler` needs to parse 0x80/0x81 and
-   reply ACK; nothing sends commands yet.
+3. ~~**App/browser → device COMMAND channel** — `ws_handler` parses 0x80/0x81 + ACK.~~
+   **Firmware DONE 2026-07-20** (recv+validate+dispatch+ACK; COMMAND drives sim
+   overrides, SUBSCRIBE sets rate + waveform on/off; mirrored in `sim_server.py`,
+   verified by `tools/ws_cmd_test.py`). **Left:** a dashboard/app UI that *sends*
+   COMMAND/SUBSCRIBE, and (to make the intro's change-password real) a new
+   AP-password `cmd_id` + NVS creds + reboot.
 4. **Kiosk-reboot autostart** on the real TV (one remaining D9 sub-item; optional
    `dpm set-device-owner` full lock). Settle: shop-floor TV must permanently rejoin the
    `ECU_TESTER` AP on boot.

@@ -206,6 +206,26 @@ also drive real outputs):
 Server replies with `ACK` (`0x8F`): payload `{ uint16 acked_seq, uint8 status }`
 (status `0x00` = ok, non-zero = rejected reason).
 
+### 5.1 Firmware handling (implemented 2026-07-20)
+`ws_handler` (firmware `main.c`) now receives B→S frames, validates
+magic/version/length/CRC, dispatches `COMMAND`/`SUBSCRIBE`, and replies `ACK`.
+The same logic is mirrored in `tools/sim_server.py`, and `tools/ws_cmd_test.py`
+exercises the whole path without hardware.
+
+- **ACK `status` codes:** `0` ok · `1` bad length · `2` bad CRC · `3` unknown/unsupported type.
+- **COMMAND** drives the **simulation** override state (D2 = monitor-only). Each
+  analog/RPM/IAC field is *forced* to the command value; a **negative `value`
+  releases** that field back to the free-running generator (there is no explicit
+  "release" opcode, and the analog ranges are all ≥ 0). `0x10/0x11/0x20` are held
+  toggles (`value` 1 = on, 0 = off); `0x05` (ECU current) is accepted but has no
+  telemetry-v1 field, so it is a no-op.
+- **SUBSCRIBE** sets the telemetry rate (`telemetry_hz`, clamped 1–60) and turns
+  **WAVEFORM streaming on/off** — any `wave_channels` bit re-enables the edge-list
+  stream that is off by default (§4).
+- *Not yet a command:* changing the Wi-Fi AP password. That needs a **new
+  `cmd_id`** plus NVS-backed credentials and a reboot — a future addition, not part
+  of this v1 signal set.
+
 ---
 
 ## 6. Versioning & compatibility

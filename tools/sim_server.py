@@ -22,6 +22,7 @@ import base64
 import hashlib
 import math
 import os
+import select
 import struct
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -93,10 +94,61 @@ def rpm_at(ts: float) -> float:
 class Sim:
     """One per WebSocket client: crank-angle accumulator + latched firing bits."""
 
+    # cmd_id -> (telemetry field, clamp ceiling) for the analog/RPM overrides
+    OVR_FIELDS = {0x01: ("maf", 5000), 0x02: ("map_", 5000), 0x03: ("iat", 5000),
+                  0x04: ("ecu_v", 25000), 0x40: ("rpm", 8000)}
+
     def __init__(self):
         self.t0 = time.monotonic()
         self.prev_t = 0.0
         self.deg = 0.0  # total crank degrees since start
+        # COMMAND/SUBSCRIBE state (docs/PROTOCOL.md §5), mirrors main.c
+        self.ovr = {}                # field -> forced value; absent = generator runs
+        self.force_coil = 0
+        self.force_inj = 0
+        self.status_set = 0
+        self.status_clr = 0
+        self.hz = 30
+        self.waveforms = SEND_WAVEFORMS
+
+    def apply_command(self, payload: bytes) -> int:
+        if len(payload) != 6:
+            return ACK_ERR_LEN
+        cmd_id, channel, value = struct.unpack("<BBi", payload)
+        if cmd_id in self.OVR_FIELDS:
+            field, hi = self.OVR_FIELDS[cmd_id]
+            if value < 0:
+                self.ovr.pop(field, None)      # release back to AUTO
+            else:
+                self.ovr[field] = min(value, hi)
+        elif cmd_id == 0x05:
+            pass                                # ECU current: no telemetry v1 field
+        elif cmd_id == 0x10 and channel < 8:
+            self.force_coil = (self.force_coil | (1 << channel)) if value else (self.force_coil & ~(1 << channel))
+        elif cmd_id == 0x11 and channel < 8:
+            self.force_inj = (self.force_inj | (1 << channel)) if value else (self.force_inj & ~(1 << channel))
+        elif cmd_id == 0x20 and channel < 16:
+            if value:
+                self.status_set |= 1 << channel; self.status_clr &= ~(1 << channel)
+            else:
+                self.status_clr |= 1 << channel; self.status_set &= ~(1 << channel)
+        elif cmd_id == 0x30:                    # IAC: raw phase nibble (matches main.c)
+            if value < 0:
+                self.ovr.pop("iac", None)
+            else:
+                self.ovr["iac"] = value & 0x0F
+        else:
+            return ACK_ERR_TYPE
+        return ACK_OK
+
+    def apply_subscribe(self, payload: bytes) -> int:
+        if len(payload) != 5:
+            return ACK_ERR_LEN
+        telemetry_hz, wave_channels, wave_mode, wave_window_ms = struct.unpack("<BBBH", payload)
+        if telemetry_hz:
+            self.hz = min(telemetry_hz, 60)
+        self.waveforms = wave_channels != 0
+        return ACK_OK
 
     def tick(self):
         """Advance to now; return (telemetry_fields, {ch: edge_list})."""
@@ -162,6 +214,13 @@ class Sim:
             status=status,
             iac=1 << ((us(now) // 150000) % 4),
         )
+        # COMMAND overrides (docs/PROTOCOL.md §5) replace the generator field-by-field
+        for field, val in self.ovr.items():
+            tele[field] = val
+        tele["coils"] |= self.force_coil
+        tele["inj_reg"] |= self.force_inj
+        tele["inj_gdi"] |= self.force_inj
+        tele["status"] = (tele["status"] | self.status_set) & ~self.status_clr & 0xFFFF
         waves = {0: ckp, 1: cam(CMP1_EVENTS), 2: cam(CMP2_EVENTS)}
         self.prev_t, self.deg = now, deg1
         return tele, waves
@@ -175,6 +234,62 @@ def ws_encode_binary(payload: bytes) -> bytes:
     if n < 65536:
         return bytes([0x82, 126]) + struct.pack(">H", n) + payload
     return bytes([0x82, 127]) + struct.pack(">Q", n) + payload
+
+def ws_decode_frames(buf: bytes):
+    """Parse complete client->server WS frames out of buf (client frames are always
+    masked, RFC 6455 §5.3). Returns (frames, rest) where frames = [(opcode, payload)]
+    and rest is the unconsumed tail (a partial frame carried to the next read)."""
+    frames, i, n = [], 0, len(buf)
+    while True:
+        if n - i < 2:
+            break
+        b1 = buf[i + 1]
+        opcode = buf[i] & 0x0F
+        masked = b1 & 0x80
+        ln = b1 & 0x7F
+        j = i + 2
+        if ln == 126:
+            if n - j < 2:
+                break
+            ln = struct.unpack(">H", buf[j:j + 2])[0]; j += 2
+        elif ln == 127:
+            if n - j < 8:
+                break
+            ln = struct.unpack(">Q", buf[j:j + 8])[0]; j += 8
+        mask = b""
+        if masked:
+            if n - j < 4:
+                break
+            mask = buf[j:j + 4]; j += 4
+        if n - j < ln:
+            break
+        payload = bytearray(buf[j:j + ln])
+        if masked:
+            for k in range(ln):
+                payload[k] ^= mask[k % 4]
+        frames.append((opcode, bytes(payload)))
+        i = j + ln
+    return frames, buf[i:]
+
+# ACK status codes — mirror main.c (docs/PROTOCOL.md §5: 0 = ok, non-zero = reason)
+ACK_OK, ACK_ERR_LEN, ACK_ERR_CRC, ACK_ERR_TYPE = 0, 1, 2, 3
+
+def decode_client_frame(data: bytes):
+    """Validate an ECU envelope (magic/version/CRC). Returns (msg_type, seq, payload)
+    or (None, seq, None) on a bad CRC, or None if malformed."""
+    if len(data) < 10 or data[0] != 0xA5 or data[1] != 0x5A or data[2] != 0x01:
+        return None
+    seq = data[4] | (data[5] << 8)
+    plen = data[6] | (data[7] << 8)
+    if 8 + plen + 2 > len(data):
+        return None
+    rx_crc = data[8 + plen] | (data[8 + plen + 1] << 8)
+    if crc16_ccitt(data[:8 + plen]) != rx_crc:
+        return (None, seq, None)
+    return (data[3], seq, data[8:8 + plen])
+
+def ack_frame(seq: int, acked_seq: int, status: int) -> bytes:
+    return make_frame(0x8F, seq, struct.pack("<HB", acked_seq & 0xFFFF, status & 0xFF))
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
@@ -202,21 +317,66 @@ class Handler(SimpleHTTPRequestHandler):
             b"HTTP/1.1 101 Switching Protocols\r\n"
             b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
             b"Sec-WebSocket-Accept: " + accept.encode() + b"\r\n\r\n")
+        self.wfile.flush()
         print(f"[ws] client {self.client_address} connected")
 
+        conn = self.connection
         sim, seq = Sim(), 0
+        rxbuf = b""
+        next_send = time.monotonic()
         try:
-            while True:  # 30 Hz: one TELEMETRY (+ WAVEFORM per channel if enabled)
-                tele, waves = sim.tick()
-                frames = [make_frame(0x01, seq, telemetry_payload(**tele))]; seq += 1
-                if SEND_WAVEFORMS:
-                    for ch, edges in waves.items():
-                        if edges:
-                            frames.append(make_frame(0x02, seq, waveform_payload(ch, edges[0][0], edges))); seq += 1
-                self.connection.sendall(b"".join(ws_encode_binary(f) for f in frames))
-                time.sleep(1 / 30)
+            while True:
+                # Block until the socket is readable OR it's time for the next frame,
+                # so client COMMAND/SUBSCRIBE frames are serviced between sends.
+                r, _, _ = select.select([conn], [], [], max(0.0, next_send - time.monotonic()))
+                if r:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break                              # client closed
+                    rxbuf += chunk
+                    msgs, rxbuf = ws_decode_frames(rxbuf)
+                    out = b""
+                    closing = False
+                    for opcode, payload in msgs:
+                        if opcode == 0x8:                  # WS close
+                            closing = True; break
+                        if opcode != 0x2:                  # only binary carries our protocol
+                            continue
+                        dec = decode_client_frame(payload)
+                        if dec is None:
+                            continue
+                        mtype, cseq, body = dec
+                        if mtype is None:
+                            status = ACK_ERR_CRC
+                        elif mtype == 0x80:
+                            status = sim.apply_command(body)
+                        elif mtype == 0x81:
+                            status = sim.apply_subscribe(body)
+                        else:
+                            status = ACK_ERR_TYPE
+                        out += ws_encode_binary(ack_frame(seq, cseq, status)); seq += 1
+                        print(f"[ws] {'COMMAND' if mtype == 0x80 else 'SUBSCRIBE' if mtype == 0x81 else 'msg'} "
+                              f"seq={cseq} -> ACK status={status}")
+                    if out:
+                        conn.sendall(out)
+                    if closing:
+                        break
+
+                # TELEMETRY (+ WAVEFORM per channel if subscribed) at the current rate
+                now = time.monotonic()
+                if now >= next_send:
+                    period = 1.0 / max(1, sim.hz)
+                    next_send = max(next_send + period, now)   # no burst catch-up after a stall
+                    tele, waves = sim.tick()
+                    frames = [make_frame(0x01, seq, telemetry_payload(**tele))]; seq += 1
+                    if sim.waveforms:
+                        for ch, edges in waves.items():
+                            if edges:
+                                frames.append(make_frame(0x02, seq, waveform_payload(ch, edges[0][0], edges))); seq += 1
+                    conn.sendall(b"".join(ws_encode_binary(f) for f in frames))
         except (BrokenPipeError, ConnectionResetError, OSError):
-            print(f"[ws] client {self.client_address} disconnected")
+            pass
+        print(f"[ws] client {self.client_address} disconnected")
 
 def main():
     global SEND_WAVEFORMS, CORRUPT_CRC
