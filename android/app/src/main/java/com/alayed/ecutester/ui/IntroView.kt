@@ -53,7 +53,12 @@ class IntroView @JvmOverloads constructor(
     private val W = 1920f
     private val H = 1080f
 
-    // scene names + durations (seconds) — mirrors window.OM_SCENES
+    // Global playback speed: the source is ~9.4 s; 1.6x plays it in ~5.9 s. Scaling
+    // the master clock (not the per-scene numbers) keeps every reveal + audio cue in
+    // proportion, so nothing gets cut off.
+    private val SPEED = 1.6f
+
+    // scene names + durations (seconds, in animation-time) — mirrors window.OM_SCENES
     private val durs = floatArrayOf(1.4f, 2.4f, 2.4f, 1.8f, 1.4f)
     private val starts = FloatArray(durs.size + 1).also {
         for (i in durs.indices) it[i + 1] = it[i] + durs[i]
@@ -73,6 +78,18 @@ class IntroView @JvmOverloads constructor(
     private var startNs = 0L
     private var ready = false
     private var interactive = false
+
+    // procedural sound bed; built off the main thread (generates PCM buffers).
+    @Volatile private var audio: IntroAudio? = null
+    private val firedCues = HashSet<String>()
+    // per-scene (localTime -> cue), ported from useCues() in ecu-intro.jsx
+    private val cueTable: Array<Array<Pair<Float, String>>> = arrayOf(
+        arrayOf(0.05f to "ambient"),
+        arrayOf(0.02f to "whoosh", 1.55f to "thump"),
+        arrayOf(0.25f to "blip1", 0.62f to "blip2", 1.38f to "impact"),
+        arrayOf(0.05f to "ripple"),
+        arrayOf(0.45f to "chime"),
+    )
 
     // NOTE: time the animation with System.nanoTime() only — Choreographer's
     // frameTimeNanos is a different clock base on some devices, and mixing the two
@@ -99,12 +116,15 @@ class IntroView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         startNs = System.nanoTime(); ready = false; interactive = false
+        firedCues.clear()
+        if (audio == null) Thread { audio = IntroAudio() }.start()
         Choreographer.getInstance().postFrameCallback(ticker)
         requestFocus()
     }
 
     override fun onDetachedFromWindow() {
         Choreographer.getInstance().removeFrameCallback(ticker)
+        audio?.release(); audio = null
         super.onDetachedFromWindow()
     }
 
@@ -322,11 +342,19 @@ class IntroView @JvmOverloads constructor(
 
     /* ---------------- draw loop ---------------- */
     override fun onDraw(canvas: Canvas) {
-        val t = if (startNs == 0L) 0f else (System.nanoTime() - startNs) / 1e9f
+        val t = if (startNs == 0L) 0f else (System.nanoTime() - startNs) / 1e9f * SPEED
         val clamped = min(t, total - 0.001f)          // rest on the end state
         var i = 0
         while (i < durs.size - 1 && clamped >= starts[i + 1]) i++
         val local = clamped - starts[i]
+
+        // fire this scene's audio cues once, as localTime crosses each. Only mark
+        // fired once the (background-built) engine actually plays it, so an early
+        // cue isn't dropped while the buffers are still generating.
+        for ((at, name) in cueTable[i]) {
+            val key = "$i:$name"
+            if (local >= at && key !in firedCues) audio?.let { it.play(name); firedCues.add(key) }
+        }
 
         val s = min(width / W, height / H)
         canvas.drawColor(Color.BLACK)
@@ -345,7 +373,7 @@ class IntroView @JvmOverloads constructor(
     }
 
     /* ---------------- input ---------------- */
-    private fun skipToEnd() { startNs = System.nanoTime() - ((total - 0.05f) * 1e9f).toLong() }
+    private fun skipToEnd() { startNs = System.nanoTime() - (((total - 0.05f) / SPEED) * 1e9f).toLong() }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (!interactive) {
@@ -356,7 +384,7 @@ class IntroView @JvmOverloads constructor(
             KeyEvent.KEYCODE_DPAD_LEFT -> { focus = "setting"; return true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> { focus = "enter"; return true }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
-                { if (focus == "enter") onEnter?.invoke() else onSettings?.invoke(); return true }
+                { audio?.play("click"); if (focus == "enter") onEnter?.invoke() else onSettings?.invoke(); return true }
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -369,8 +397,8 @@ class IntroView @JvmOverloads constructor(
         val fy0 = (e.y - (height - H * s) / 2f) / s / H
         fun hit(r: Rgn) = kotlin.math.abs(fx0 - r.cx) < r.rx * 0.9f && kotlin.math.abs(fy0 - r.cy) < r.ry * 0.9f
         when {
-            hit(entR) -> { focus = "enter"; onEnter?.invoke() }
-            hit(setR) -> { focus = "setting"; onSettings?.invoke() }
+            hit(entR) -> { audio?.play("click"); focus = "enter"; onEnter?.invoke() }
+            hit(setR) -> { audio?.play("click"); focus = "setting"; onSettings?.invoke() }
         }
         return true
     }

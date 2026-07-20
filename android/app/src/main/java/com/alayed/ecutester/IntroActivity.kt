@@ -63,7 +63,7 @@ class IntroActivity : AppCompatActivity() {
 
     /* ---------------- change-password modal ---------------- */
     private fun prefs() = getSharedPreferences("ecu", MODE_PRIVATE)
-    private fun storedPassword() = prefs().getString("ecu_tester_password", "0000") ?: "0000"
+    private fun storedPassword() = prefs().getString("ecu_tester_password", "00000000") ?: "00000000"
 
     private fun showPasswordDialog() {
         val dp = resources.displayMetrics.density
@@ -138,7 +138,7 @@ class IntroActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = d(9) })
         panel.addView(row)
         panel.addView(TextView(this).apply {
-            text = "Default password: 0000"; setTextColor(Color.parseColor("#5f7d95")); textSize = 13f
+            text = "Default password: 00000000"; setTextColor(Color.parseColor("#5f7d95")); textSize = 13f
             setPadding(0, d(14), 0, 0)
         })
 
