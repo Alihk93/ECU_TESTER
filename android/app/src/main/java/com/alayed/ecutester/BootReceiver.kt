@@ -16,7 +16,8 @@ class BootReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             "android.intent.action.QUICKBOOT_POWERON" -> {
-                val launch = Intent(context, MainActivity::class.java)
+                // Boot into the intro splash; ENTER hands off to the dashboard.
+                val launch = Intent(context, IntroActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launch)
             }
