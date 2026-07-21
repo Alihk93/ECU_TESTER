@@ -192,15 +192,6 @@ function Emblem({ localTime: t, scene }) {
     plate={{ opacity: seg(t, 0.35, 0.95), scale: 1.16 - 0.16 * pp, bright: 0.7 + 0.3 * pp, glow: 10 * (1 - pp) }}
     flash={flash} gleam={seg(t, 1.5, 2.25)} />;
 }
-function Marques({ localTime: t, scene }) {
-  useLabel(scene, t); useCues(t, [[0.05, 'ripple']]);
-  return <Frame bg={0.12} circuits={0.9} bars={0.12} vig={0.85} groundGlow={0.5}
-    cars={{}} plate={{}}
-    logos={i => {
-      const st = 0.08 + i * 0.09, pi = seg(t, st, st + 0.42, outCubic);
-      return { opacity: seg(t, st, st + 0.16), scale: 0.35 + 0.65 * pi, bright: 1 + 0.6 * (1 - pi), glow: 9 * pi * (1 - pi) * 4 };
-    }} />;
-}
 function Showtime({ localTime: t, scene }) {
   useLabel(scene, t); useCues(t, [[0.45, 'chime']]);
   const ot = seg(t, 0.05, 0.6, outCubic), ob = seg(t, 0.25, 0.9, outCubic);
@@ -299,7 +290,7 @@ function ECUIntro() {
   CFG.enterUrl = t.enterUrl || 'dashboard.html';
   return <div style={{ position: 'fixed', inset: 0, background: '#000' }}>
     <SceneStage width={1920} height={1080} scenes={window.OM_SCENES} playback={window.OM_PLAYBACK} bg="#020407">
-      {{ 'Power On': PowerOn, 'Cars': Cars, 'Emblem': Emblem, 'Marques': Marques, 'Showtime': Showtime }}
+      {{ 'Power On': PowerOn, 'Cars': Cars, 'Emblem': Emblem, 'Showtime': Showtime }}
     </SceneStage>
     <TweaksPanel>
       <TweakSection label="Intro" />

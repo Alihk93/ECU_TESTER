@@ -29,9 +29,9 @@ import kotlin.math.sin
  * ECU Tester cinematic intro — native Canvas port of the Claude Design handoff
  * (ecu-intro.jsx). All art is one composite image (R.drawable.intro_bg); each
  * "element" is a feathered-ellipse crop of that image, revealed/scaled/brightened
- * per scene. Five scenes on a fixed 1920x1080 stage, scaled-to-fit like the
+ * per scene. Four scenes on a fixed 1920x1080 stage, scaled-to-fit like the
  * dashboard's StageLayout:
- *   Power On (1.4) → Cars (2.4) → Emblem (2.4) → Marques (1.8) → Showtime (1.4)
+ *   Power On (1.4) → Cars (2.4) → Emblem (2.4) → Showtime (1.4)
  * After the last scene it rests on the interactive end state (SETTING / ENTER).
  *
  * Blur (cars focus-pull) and glow are approximated cheaply (a downscaled copy /
@@ -58,8 +58,9 @@ class IntroView @JvmOverloads constructor(
     // proportion, so nothing gets cut off.
     private val SPEED = 1.6f
 
-    // scene names + durations (seconds, in animation-time) — mirrors window.OM_SCENES
-    private val durs = floatArrayOf(1.4f, 2.4f, 2.4f, 1.8f, 1.4f)
+    // scene durations (seconds, animation-time). The Marques scene was dropped with
+    // the brand-logo row (2026 redesign) — it had nothing left to reveal.
+    private val durs = floatArrayOf(1.4f, 2.4f, 2.4f, 1.4f)   // Power On, Cars, Emblem, Showtime
     private val starts = FloatArray(durs.size + 1).also {
         for (i in durs.indices) it[i + 1] = it[i] + durs[i]
     }
@@ -87,7 +88,6 @@ class IntroView @JvmOverloads constructor(
         arrayOf(0.05f to "ambient"),
         arrayOf(0.02f to "whoosh", 1.55f to "thump"),
         arrayOf(0.25f to "blip1", 0.62f to "blip2", 1.38f to "impact"),
-        arrayOf(0.05f to "ripple"),
         arrayOf(0.45f to "chime"),
     )
 
@@ -312,14 +312,6 @@ class IntroView @JvmOverloads constructor(
             flash = flash, gleam = seg(t, 1.5f, 2.25f))
     }
 
-    private fun marques(c: Canvas, t: Float) {
-        frame(c, bg = 0.12f, circuits = 0.9f, groundGlow = 0.5f, cars = RP(), plate = RP(),
-            logoFn = { i ->
-                val st = 0.08f + i * 0.09f; val pi = seg(t, st, st + 0.42f, outCubic)
-                RP(opacity = seg(t, st, st + 0.16f), scale = 0.35f + 0.65f * pi, bright = 1f + 0.6f * (1f - pi), glow = 9f * pi * (1f - pi) * 4f)
-            })
-    }
-
     private fun showtime(c: Canvas, t: Float) {
         val ot = seg(t, 0.05f, 0.6f, outCubic); val ob = seg(t, 0.25f, 0.9f, outCubic)
         val full = seg(t, 0.55f, 1.2f)
@@ -374,7 +366,6 @@ class IntroView @JvmOverloads constructor(
             0 -> powerOn(canvas, local)
             1 -> cars(canvas, local)
             2 -> emblem(canvas, local)
-            3 -> marques(canvas, local)
             else -> showtime(canvas, local)
         }
         canvas.restore()
