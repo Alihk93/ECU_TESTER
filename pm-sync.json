@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "6528e91 · fix(android): remove AI-artifact sparkle from the intro art",
-  "lastCommitDate": "2026-07-21T14:18:48+03:00",
+  "lastCommit": "c7b2e7a · fix(android): sharpen the intro art (single-pass re-encode)",
+  "lastCommitDate": "2026-07-21T19:41:32+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-21T11:19:01.755813397Z"
+  "lastSync": "2026-07-21T16:41:32.564882380Z"
 }
