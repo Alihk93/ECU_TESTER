@@ -123,7 +123,8 @@ const L = { // regions (fractions of frame)
   setBtn: { cx: 0.116, cy: 0.926, rx: 0.10, ry: 0.062 },
   entBtn: { cx: 0.892, cy: 0.926, rx: 0.105, ry: 0.062 },
 };
-const LOGOS = Array.from({ length: 11 }, (_, i) => ({ cx: 0.085 + 0.0888 * i, cy: 0.658, rx: 0.048, ry: 0.056, feather: 0.7 }));
+// No brand-logo row in the current intro art (2026 redesign uses the circuit pattern). Empty = no reveal.
+const LOGOS = [];
 
 /* Shared composite: every scene renders the frame from one params object */
 function Frame(p) {
