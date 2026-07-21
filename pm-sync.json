@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "3bc7214 · feat(android): new intro splash art (AL-AYED redesign, no logo row)",
-  "lastCommitDate": "2026-07-21T13:53:32+03:00",
+  "lastCommit": "6528e91 · fix(android): remove AI-artifact sparkle from the intro art",
+  "lastCommitDate": "2026-07-21T14:18:48+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-21T10:53:47.074932425Z"
+  "lastSync": "2026-07-21T11:19:01.755813397Z"
 }
