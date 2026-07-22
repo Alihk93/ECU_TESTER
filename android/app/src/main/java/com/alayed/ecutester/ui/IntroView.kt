@@ -146,8 +146,8 @@ class IntroView @JvmOverloads constructor(
     private val entR = Rgn(0.894f, 0.925f, 0.105f, 0.062f)
     // tight button bounds (l,t,r,b fractions), measured from the art — for the focus
     // ring, which must hug the baked button, not the wider reveal ellipse.
-    private val setBtnBox = floatArrayOf(0.023f, 0.879f, 0.189f, 0.971f)
-    private val entBtnBox = floatArrayOf(0.817f, 0.879f, 0.971f, 0.971f)
+    private val setBtnBox = floatArrayOf(0.033f, 0.861f, 0.189f, 0.956f)
+    private val entBtnBox = floatArrayOf(0.811f, 0.861f, 0.967f, 0.956f)
     // No brand-logo row in the current intro art (2026 redesign replaced it with the
     // circuit-board pattern). Empty -> the Marques scene reveals nothing (frame()'s
     // logoFn loop is a no-op), so no phantom emblem pops over the background.
