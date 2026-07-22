@@ -21,11 +21,32 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <!-- DEVICE -->
+            <!-- BACK (returns to the intro) — styled like the DEVICE panel -->
+            <LinearLayout
+                android:id="@+id/back_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bd_line9"
+                android:paddingHorizontal="22px"
+                android:paddingVertical="16px"
+                android:clickable="true"
+                android:focusable="true">
+                <ImageView android:layout_width="30px" android:layout_height="30px"
+                    android:src="@drawable/ic_back_arrow" android:contentDescription="Back" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="13px" android:text="Back"
+                    android:textColor="@color/txt_label" android:textSize="25px" android:textStyle="bold"
+                    android:letterSpacing="0.06" />
+            </LinearLayout>
+
+            <!-- DEVICE (status: connected/disconnected) — moved into the old uptime slot -->
             <LinearLayout
                 android:id="@+id/device_panel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="20px"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:background="@drawable/bd_line9"
@@ -39,19 +60,6 @@
                 <TextView android:id="@+id/device_status" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginStart="13px" android:text="CONNECTED"
                     android:textColor="@color/led_green" android:textSize="25px" android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- UPTIME -->
-            <LinearLayout
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginStart="20px" android:orientation="horizontal" android:gravity="center_vertical"
-                android:background="@drawable/bd_line9" android:paddingHorizontal="22px" android:paddingVertical="16px">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="UPTIME:" android:textColor="@color/txt_label"
-                    android:textSize="23px" android:textStyle="bold" android:letterSpacing="0.06" />
-                <TextView android:id="@+id/uptime" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="12px" android:text="00:00:00" android:fontFamily="@font/dseg7_classic"
-                    android:textColor="@color/seg_cyan" android:textSize="35px" />
             </LinearLayout>
 
             <!-- LOGO (flex 1) -->

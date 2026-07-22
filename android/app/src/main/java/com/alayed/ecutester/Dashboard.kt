@@ -31,7 +31,6 @@ class Dashboard(private val root: View) {
     // top bar
     private val deviceLed = root.findViewById<View>(R.id.device_led)
     private val deviceStatus = root.findViewById<TextView>(R.id.device_status)
-    private val uptime = root.findViewById<TextView>(R.id.uptime)
     private val voltage = root.findViewById<TextView>(R.id.voltage)
     private val current = root.findViewById<TextView>(R.id.current)
 
@@ -83,11 +82,9 @@ class Dashboard(private val root: View) {
         val mp = LinearLayout.LayoutParams.MATCH_PARENT
         val grid = root.findViewById<LinearLayout>(R.id.status_grid)
 
-        // Both fans share ONE bordered box (client feedback): fanBox has the border,
-        // the two fan sub-cells inside are borderless.
+        // Both fans share ONE box — no outline (client feedback).
         val fanBox = LinearLayout(root.context)
         fanBox.orientation = LinearLayout.HORIZONTAL
-        fanBox.setBackgroundResource(R.drawable.bd_fan)
         fanBox.setPadding(8, 8, 8, 8)
         grid.addView(fanBox, llp(0, mp, 2f))   // spans what the two fan cells did
         for ((idx, key) in listOf("fan1", "fan2").withIndex()) {
@@ -102,22 +99,23 @@ class Dashboard(private val root: View) {
             fans[key] = Fan(img)
         }
 
-        // imo / hip / iac — separate bordered cells
-        data class Cfg(val key: String, val img: Int, val border: Int, val weight: Float, val red: Boolean, val leds: Boolean)
+        // imo / hip / iac — separate cells, no outline (client feedback)
+        data class Cfg(val key: String, val img: Int, val weight: Float, val red: Boolean, val leds: Boolean)
         val cfgs = listOf(
-            Cfg("imo", R.drawable.imo2, R.drawable.bd_red, 1f, true, false),
-            Cfg("hip", R.drawable.hip, R.drawable.bd_red, 1f, true, false),
-            Cfg("iac", R.drawable.iac, R.drawable.bd_iac, 2f, false, true),
+            Cfg("imo", R.drawable.imo2, 1f, true, false),
+            Cfg("hip", R.drawable.hip, 1f, true, false),
+            Cfg("iac", R.drawable.iac, 2f, false, true),
         )
         for (c in cfgs) {
             val box = FrameLayout(root.context)
-            box.setBackgroundResource(c.border)
             box.setPadding(8, 8, 8, 8)
             grid.addView(box, llp(0, mp, c.weight).apply { marginStart = 12 })
 
             val img = ImageView(root.context)
             img.scaleType = ImageView.ScaleType.FIT_CENTER
             img.setImageResource(c.img)
+            // IMO icon reads dull (#F1331D) — tint to the vivid battery red
+            if (c.key == "imo") img.setColorFilter(color("#FF4A3D"), android.graphics.PorterDuff.Mode.SRC_IN)
             box.addView(img, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
                 if (c.leds) bottomMargin = 26
             })
@@ -183,12 +181,12 @@ class Dashboard(private val root: View) {
             label.setSingleLine()          // one line, no hyphen break
             label.gravity = Gravity.CENTER
             label.setTypeface(label.typeface, Typeface.BOLD)
-            label.setTextColor(if (c.green) color("#55e06a") else color("#ff4a3d"))
+            label.setTextColor(if (c.green) color("#55e06a") else color("#ff3b2a"))
             // Auto-size: fill the column width and shrink the label to the largest
-            // size that fits (8–14px). Avoids both hyphen-wrap clipping and
-            // overflow-into-neighbours, whatever the font metrics.
+            // size that fits (10–18px). Bigger, bolder text renders the red solidly
+            // instead of muddy thin anti-aliased strokes. Auto-size still caps at fit.
             androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                label, 8, 14, 1, android.util.TypedValue.COMPLEX_UNIT_PX)
+                label, 10, 18, 1, android.util.TypedValue.COMPLEX_UNIT_PX)
             col.addView(label, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
@@ -200,6 +198,8 @@ class Dashboard(private val root: View) {
             val img = ImageView(root.context)
             img.scaleType = ImageView.ScaleType.FIT_CENTER
             img.setImageResource(c.img)
+            // red indicators: force the icon to the bright battery red (#FF4A3D)
+            if (!c.green) img.setColorFilter(color("#FF4A3D"), android.graphics.PorterDuff.Mode.SRC_IN)
             circle.addView(img, FrameLayout.LayoutParams(44, 44, Gravity.CENTER))
 
             indicators[c.name] = Indicator(label, circle, img, ring)
@@ -380,8 +380,8 @@ class Dashboard(private val root: View) {
             return
         }
         val c = statusCells[key] ?: return
-        // red cells (imo/hip): dim when inactive
-        c.img.alpha = if (on) 1f else 0.4f
+        // IMMO car stays bright red always; other red cells dim when inactive
+        c.img.alpha = if (on || key == "imo") 1f else 0.4f
     }
 
     // Soft start / stop: each fan's speed eases toward top (on) or 0 (off); the loop
@@ -396,9 +396,9 @@ class Dashboard(private val root: View) {
                 fanLast = now
                 var active = false
                 for (f in fans.values) {
-                    val target = if (f.on) 300f else 0f          // deg/sec top speed
-                    if (f.speed < target) f.speed = minOf(target, f.speed + 220f * dt)  // spin-up ~1.4 s
-                    else if (f.speed > target) f.speed = maxOf(target, f.speed - 140f * dt) // coast ~2.1 s
+                    val target = if (f.on) 1100f else 0f         // deg/sec top speed (faster)
+                    if (f.speed < target) f.speed = minOf(target, f.speed + 650f * dt)  // brisk spin-up
+                    else if (f.speed > target) f.speed = maxOf(target, f.speed - 260f * dt) // coast down
                     if (f.speed > 0.05f) { f.angle = (f.angle + f.speed * dt) % 360f; f.img.rotation = f.angle }
                     if (f.on || f.speed > 0.05f) active = true
                 }
@@ -419,13 +419,5 @@ class Dashboard(private val root: View) {
         deviceStatus.text = if (on) "CONNECTED" else "DISCONNECTED"
         deviceStatus.setTextColor(res.getColor(if (on) R.color.led_green else R.color.led_red, null))
         deviceLed.setBackgroundResource(if (on) R.drawable.bd_led_green else R.drawable.bd_led_red)
-    }
-
-    private var uptimeSec = 0
-    fun resetUptime() { uptimeSec = 0 }
-    fun tickUptime() {
-        uptimeSec++
-        val h = (uptimeSec / 3600) % 100; val m = (uptimeSec / 60) % 60; val s = uptimeSec % 60
-        uptime.text = "%02d:%02d:%02d".format(Locale.US, h, m, s)
     }
 }

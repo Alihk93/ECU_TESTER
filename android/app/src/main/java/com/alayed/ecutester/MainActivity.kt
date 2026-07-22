@@ -91,16 +91,17 @@ class MainActivity : AppCompatActivity() {
             onStatus = { st ->
                 connected = st == "connected"
                 dashboard.setConnected(connected)
-                if (connected) dashboard.resetUptime()
                 updateMeter()
             },
         )
         socket.connect()
 
-        // uptime 1 Hz
-        ui.post(object : Runnable {
-            override fun run() { dashboard.tickUptime(); ui.postDelayed(this, 1000) }
-        })
+        // Back button -> return to the intro splash.
+        findViewById<View>(R.id.back_btn).setOnClickListener {
+            startActivity(Intent(this, IntroActivity::class.java))
+            finish()
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        }
 
         // Stale-stream watchdog (parity with web live.js): TV Wi-Fi power save /
         // an AP reboot can kill the TCP stream with NO close event — OkHttp then

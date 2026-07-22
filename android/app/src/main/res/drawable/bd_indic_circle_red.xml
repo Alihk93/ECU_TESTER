@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
     <solid android:color="@color/navy_deep" />
-    <stroke android:width="2px" android:color="#CCFF3C2D" />
+    <!-- vivid battery red (was 80%-opacity #CCFF3C2D, which read dull) -->
+    <stroke android:width="3px" android:color="#FF4A3D" />
 </shape>

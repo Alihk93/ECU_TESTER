@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Left-arrow in the DEVICE-panel text colour (txt_label). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30px" android:height="30px"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#c7d0d8" android:strokeWidth="2.4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M10,5 L3,12 L10,19 M3,12 H20" />
+</vector>
