@@ -1,182 +1,151 @@
-# ECU_TESTER — Handover Summary (2026-07-20)
+# ECU_TESTER — Handover Summary (2026-07-22)
 
-> Paste-ready session primer. For the authoritative source of truth read `CLAUDE.md`
-> first; full decision log + open-work punchlist live in `OPEN_DECISIONS.md`.
+> Paste-ready session primer. `CLAUDE.md` / `docs/PROTOCOL.md` / `OPEN_DECISIONS.md`
+> remain the in-repo source of truth; this folds in recent work on top of them.
 
-## What this project is
-A real-time hardware-in-the-loop **car-ECU bench tester** for client **AL-AYED**, by the
-firm **TON by Swiss**. An **ESP32-S3-WROOM-1 N16R8** (16 MB flash, 8 MB octal PSRAM)
-acquires ~50 automotive signals + crank/cam waveforms, runs its own Wi-Fi SoftAP, and
-serves telemetry over a **binary WebSocket** protocol to a display client. **Monitor-only**
-— reads ECU outputs, never drives signals into the ECU.
+## 1. What it is
+Real-time hardware-in-the-loop **car-ECU bench tester** for client **AL-AYED**, by the
+firm **TON by Swiss**. An **ESP32-S3-WROOM-1 N16R8** acquires ~50 automotive signals +
+crank/cam waveforms, runs its own Wi-Fi SoftAP, and serves telemetry over a **binary
+WebSocket** to a display client. **Monitor-only** (reads ECU outputs, never drives the
+ECU). Full **simulation mode** runs with no hardware attached.
+- **Repo:** `Alihk93/ECU_TESTER`, branch `main`.
+- **Two display clients:** **Android app (`android/`, PRIMARY)** and the **web dashboard
+  (`web/`, fallback)** — both are WS clients on `/ws`.
 
-- **Repo:** `Alihk93/ECU_TESTER`, branch `main` (HEAD current, clean, in sync).
-- Two display clients: **Android TV app (`android/`, PRIMARY)** and the **web dashboard
-  (`web/`, fallback)**. Both are just WS clients on `/ws`.
-
-## Environment / build
-**Firmware** (ESP-IDF v5.5.2, target `esp32s3`; serial `/dev/ttyACM0` first, else `/dev/ttyUSB0`):
+## 2. Environment / build
+**Firmware** (ESP-IDF v5.5.2, target `esp32s3`, serial `/dev/ttyACM0`):
 ```
 export IDF_TOOLS_PATH=/home/ali/ESP_IDF/Version_5.5.2/IDF_Tool_v5.5.2
 export IDF_PYTHON_ENV_PATH=$IDF_TOOLS_PATH/python_env/idf5.5_py3.13_env
 source /home/ali/ESP_IDF/Version_5.5.2/IDF_v5.5.2/v5.5.2/esp-idf/export.sh
-idf.py -C firmware/ECU_Tester build
-idf.py -C firmware/ECU_Tester -p /dev/ttyACM0 flash
+idf.py -C firmware/ECU_Tester build       # or: -p /dev/ttyACM0 flash
 ```
-**Android** (userspace toolchain — nothing on PATH by default; Gradle wrapper 8.7,
-minSdk 24, compileSdk 34, AGP 8.5.2, Kotlin 1.9.24, JDK 17):
+**Android** (userspace toolchain, nothing on PATH; Gradle 8.7, minSdk 24, compileSdk 34,
+AGP 8.5.2, Kotlin 1.9.24, JDK 17):
 ```
-export JAVA_HOME=~/Android/jdk17
-export ANDROID_HOME=~/Android/Sdk; export ANDROID_SDK_ROOT=~/Android/Sdk
+export JAVA_HOME=~/Android/jdk17; export ANDROID_HOME=~/Android/Sdk; export ANDROID_SDK_ROOT=~/Android/Sdk
 export PATH="$JAVA_HOME/bin:$PATH"
 cd android && ./gradlew :app:assembleDebug   # -> app/build/outputs/apk/debug/app-debug.apk
-# adb=~/Android/Sdk/platform-tools/adb
+# adb=~/Android/Sdk/platform-tools/adb ; use the ABSOLUTE apk path with adb install
 ```
-**Dashboard/dev sim (no hardware):** `python3 tools/sim_server.py [--host 0.0.0.0]
-[--corrupt] [--waveforms]` → serves `web/` + real binary protocol on `:8090`. `--corrupt`
-= bad CRCs (integrity test); `--waveforms` = re-enable edge-list streaming (off by
-default). Android USB dev loop: `adb reverse tcp:8090 tcp:8090` → `adb shell am start -n
-com.alayed.ecutester/.IntroActivity` → `adb exec-out screencap`.
+**Dev sim (no hardware):** `python3 tools/sim_server.py [--host 0.0.0.0] [--corrupt]
+[--waveforms]` → serves `web/` + real binary protocol on `:8090`. `tools/ws_cmd_test.py`
+exercises the command channel.
 
-## Architecture — locked decisions (D0–D9, `OPEN_DECISIONS.md`)
-- **D0** clean start (S-ECU patterns only, no code reuse).
-- **D1** AP: SSID `ECU_TESTER`, pw `00000000` (WPA2-PSK, 8-char min), IP **`10.10.10.10`**
-  (non-default, set explicitly).
-- **D2** monitor-only — no stimulus into the ECU (manual controls exist only in sim mode).
-- **D3** activity-only coil/injector bits (latched "fired since last frame", no dwell/PW).
-- **D4** front-end designed in this KiCad project — **NOT started** (blocks real drivers).
-- **D5** CKP = VR 60-2 (MAX9926); CMP1/CMP2 = Hall (jumperable to either).
-- **D6** waveform = edge-list; **not streamed by default** since 2026-07-12
-  (`s_wave_stream=false`; nothing plots it, scope is parametric).
-- **D7** MCP23017 (status) + 74HC165×3 (24 activity bits) + ADS1115 (precision analog).
-  Pinmap committed in `board_config.h`.
-- **D8** (superseded by D9) — Chromium kiosk on a mini-PC; kept as fallback.
-- **D9** (resolved) — display client = **native Android TV app**. GPU-composited, removes
-  the TV-browser software-render FPS ceiling. Firmware/protocol/assets unchanged.
+## 3. Architecture — locked decisions (D0–D9, full log in `OPEN_DECISIONS.md`)
+- **D0** clean start (S-ECU patterns only). **D1** AP: SSID `ECU_TESTER`, pw `00000000`
+  (WPA2), IP **`10.10.10.10`** (set explicitly). **D2** monitor-only (manual controls only
+  in sim). **D3** activity-only coil/injector bits (latched, no dwell/PW). **D4** front-end
+  designed in this KiCad project — **NOT started** (blocks real drivers). **D5** CKP =
+  VR 60-2 (MAX9926), CMP1/CMP2 = Hall. **D6** waveform = edge-list, **default-off** (scope
+  is parametric). **D7** MCP23017 (status) + 74HC165×3 (24 bits) + ADS1115 (analog).
+  **D8** (superseded) Chromium kiosk. **D9** display = **native Android app**; firmware/
+  protocol unchanged, app is a 4th protocol mirror.
 
-## The protocol contract — FOUR mirrors, change together
-`docs/PROTOCOL.md` ⇄ `firmware/.../main/include/protocol.h` ⇄ `web/js/protocol.js` ⇄
+## 4. Protocol contract — FOUR mirrors, change together
+`docs/PROTOCOL.md` ⇄ `firmware/.../include/protocol.h` ⇄ `web/js/protocol.js` ⇄
 `android/.../Protocol.kt`
 - Binary, **little-endian**, envelope 8 B + payload + **CRC16-CCITT-FALSE** (poly 0x1021,
-  init 0xFFFF, check vector 0x29B1).
-- **TELEMETRY (0x01, 22 B):** `t_us(u32), rpm(u16), maf(u16), map(u16), iat(int16),
-  ecu_v(u16), sensor_v(u16)` — all analog = raw mV at the ECU pin (UI applies transfer
-  curves) — `coils/inj_reg/inj_gdi(u8 latched activity)`, `status(u16 bitfield)`,
-  `iac(u8 phase nibble)`.
-- **WAVEFORM (0x02):** CKP/CMP edge-lists; default-off. All clients bail out **before** the
-  CRC pass on a WAVEFORM frame (FPS optimization).
-- **COMMAND (0x80)/SUBSCRIBE (0x81)/ACK (0x8F):** defined in spec, **not handled by
-  firmware** (`ws_handler` only completes the WS handshake).
+  init 0xFFFF, check 0x29B1).
+- **TELEMETRY (0x01, 22 B):** `t_us(u32) rpm(u16) maf(u16) map(u16) iat(i16) ecu_v(u16)
+  sensor_v(u16)` (analog = raw mV, UI applies curves), `coils/inj_reg/inj_gdi(u8 latched)`,
+  `status(u16 bitfield)`, `iac(u8)`.
 - **Status bits:** 0 battery, 1 switch, 2 start, 3 etc, 4 fan1, 5 fan2, 8 fuelPump,
   9 immoP, 10 immoN, 11 mrcP, 12 mrcN.
+- **WAVEFORM (0x02):** edge-lists, default-off; clients bail before the CRC pass.
+  **COMMAND(0x80)/SUBSCRIBE(0x81)/ACK(0x8F):** implemented — see §5.1 in `docs/PROTOCOL.md`.
 
-## Firmware state (`firmware/ECU_Tester/`, ESP-IDF)
-- Compiles clean for `esp32s3` (~73% app partition free). **Verified on the physical
-  ESP32 2026-07-19**: SoftAP up @ `10.10.10.10`, LittleFS mounted, dashboard served, WS
-  clients connect, no evictions over 5+ min.
-- **Live data path done end-to-end in SIMULATION:** `acq_task` (core 1) generates
-  RPM/analog-mV/status/IAC; `net_task` (core 0) integrates a crank-angle accumulator →
-  latched coil/injector firing bits + CKP 60-2/CMP edge-lists, broadcasts TELEMETRY
-  ~30 Hz. `ws_broadcast` = non-blocking per-client sends (zero-timeout `select`) + ~2 s
-  eviction so one dozing client can't freeze others.
-- **Real acquisition drivers NOT built** (blocked on D4 hardware) — still sim generators.
-- Committed review fixes: **LRU-counter touch on WS send** (don't evict live viewers),
-  **NVS erase-and-retry** (no boot-loop).
-- Load-bearing (don't silently retune): `sdkconfig.defaults` (`CONFIG_HTTPD_WS_SUPPORT=y`),
-  `partitions.csv` (4 MB `storage` littlefs), `main/CMakeLists.txt` (builds the LittleFS
-  image from `web/`).
+## 5. Firmware state (`firmware/ECU_Tester/`) — committed
+- Compiles clean for `esp32s3` (~73% app free). Verified on the real ESP32 (SoftAP @
+  10.10.10.10, LittleFS mounted, dashboard served, boots clean). Re-flashed + verified this
+  session — `App version` shows the HEAD commit.
+- **Live data path DONE in SIMULATION:** `acq_task`(core1) generates RPM/analog/status/IAC;
+  `net_task`(core0) integrates crank angle → latched firing bits + edge-lists, broadcasts
+  TELEMETRY ~30 Hz. `ws_broadcast` = non-blocking per-client sends + ~2 s eviction.
+- **COMMAND/SUBSCRIBE — DONE:** `ws_handler` receives B→S frames, validates
+  magic/version/len/CRC, dispatches, replies ACK. COMMAND drives sim overrides (RPM/analog-mV/
+  IAC forced; negative value releases to auto; coil/inj/status held toggles); SUBSCRIBE sets
+  rate (1–60 Hz) + waveform on/off. Mirrored in `sim_server.py`; verified 6/6 by
+  `tools/ws_cmd_test.py`. **No client sends commands yet.**
+- Don't silently retune: `sdkconfig.defaults` (`CONFIG_HTTPD_WS_SUPPORT=y`), `partitions.csv`
+  (4 MB `storage` littlefs), `main/CMakeLists.txt` (builds the LittleFS image from `web/`),
+  the committed pinmap in `board_config.h`.
 
-## Web dashboard (`web/`, FALLBACK client)
-- Flat marine skin (navy `#33516f`, **no gradients/shadows/filters** — client-locked).
-  **ES5 classic scripts** (old-TV compat down to ~Chromium 49). **Flexbox only** (no CSS
-  Grid, no flex `gap`, no `inset:`, no `space-evenly`, no `NodeList.forEach`). Full
-  1920×1080 cluster scaled to viewport.
-- Contract mirror `js/protocol.js`; `js/live.js` maps frames → the `ECU` API in `app.js`
-  (coalesced, rAF-paced). Scope is a **parametric standing display** (not a live plot).
-- **The intro splash is Android-only** — the 6.5 MB image won't fit the 4 MB LittleFS and
-  the intro's blur/gradient effects violate the old-TV perf rules.
+## 6. Web dashboard (`web/`, FALLBACK)
+Flat marine skin (navy `#33516f`, no gradients/shadows/filters). **ES5 classic scripts** +
+**flexbox only** (old-TV compat down to ~Chromium 49). Scope is a parametric standing
+display. Contract mirror `js/protocol.js`; `js/live.js` maps frames → the `ECU` API in
+`app.js`. Unchanged recently.
 
-## Android app (`android/`, PRIMARY client)
-- Kotlin, classic Views/Canvas (not Compose/SurfaceView), OkHttp WS, minSdk 24. **One
-  universal APK runs on TV + phone + tablet** (touchscreen & leanback both
-  `required="false"`, dual launcher intents, no native ABI split, StageLayout
-  scale-to-fit). Landscape-locked; kiosk plumbing (BootReceiver autostart, crash-relaunch,
-  show-over-lockscreen, optional device-owner lock-task).
-- Files: `Protocol.kt` (4th mirror), `EcuSocket.kt` (OkHttp WS + 500ms→5s backoff),
-  `LiveMapper.kt` (coalesce per painted frame), `DemoDriver.kt` (free-run demo until first
-  real frame), `Dashboard.kt` (view controller), `ui/StageLayout.kt`, `ui/RpmDialView.kt`,
-  `ui/MiniGaugeView.kt`, `ui/ScopeView.kt`, `MainActivity.kt`.
-- Committed review fixes: **stale-stream watchdog** (1 s tick, cycle socket if telemetry
-  stales >2.5 s — the TV-freeze fix), **locale-pinned formatting** (`Locale.US`), **spark
-  re-flash while firing bit held** (no freeze at high RPM).
-- **VERIFIED on a real Android TV vs the real ESP32 (2026-07-19)** — G08 4K TV, Android 12:
-  reports a **1920×1080 UI override** (stage scales 1:1), links to `10.10.10.10` over the
-  AP, **~51 fps** live, stable 5+ min, zero evictions. **Watchdog validated**: DISCONNECTED
-  in **3 s** on device power-loss, clean freeze, auto-recovers (~22 s Wi-Fi-back → WS
-  reconnect). Also verified on a Galaxy Tab S6 Lite (Android 13, current USB dev device)
-  and a Huawei P30 phone.
+## 7. Android app (`android/`, PRIMARY)
+Kotlin, classic Views/Canvas, OkHttp WS, one universal APK (TV + phone + tablet),
+landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainActivity`
+(dashboard). Files: `Protocol.kt`, `EcuSocket.kt`, `LiveMapper.kt`, `DemoDriver.kt`,
+`Dashboard.kt`, `ui/{StageLayout,RpmDialView,MiniGaugeView,ScopeView,IntroView,IntroAudio}.kt`.
 
-## Cinematic AL-AYED intro splash (Android — added 2026-07-20)
-- **`IntroActivity`** is the cold-launch entry (app icon / TV Apps row / boot); plays a
-  **~5.9 s** 5-scene intro (Power On → Cars → Emblem → Marques → Showtime), then
-  **ENTER → MainActivity** (dashboard). `CATEGORY_HOME` stays on MainActivity so **Home
-  returns to the dashboard, not a replayed intro**. `BootReceiver` → IntroActivity.
-- **`ui/IntroView.kt`** — native Canvas port of a Claude Design handoff (`ecu-intro.jsx`).
-  All art is one composite image; each element is a feathered-ellipse crop revealed/scaled/
-  brightened per scene, + overlays (ground glow, streak, flash, gleam, vignette, letterbox
-  bars). Global `SPEED=1.6f` time-scale.
-- **`ui/IntroAudio.kt`** — procedural sound bed (ambient/whoosh/thump/blips/impact/ripple/
-  chime/click) rendered to PCM, played via AudioTrack, cued per scene.
-- End state: TV-remote + touch nav; **ENTER → dashboard**, **SETTING → change-password
-  modal** (SharedPreferences, **default `00000000`**).
-- Asset: 5.8 MB source PNG re-encoded to a **183 KB WebP** at display size
-  (`res/drawable-nodpi/intro_bg.webp`); duplicate small top-logo painted out of the asset.
-- **Key gotcha:** the intro MUST be a **separate top-level activity** — launching it from
-  `MainActivity.onCreate` tangled the lifecycle and starved its layout/draw (~60 s black
-  screen). Design source filed at `docs/design-refs/ecu-intro/`. See `android/README.md`.
-- Open design calls: plays on **every cold start** (skippable) — could be once-only; ~5.9 s
-  pace is tunable; Settings modal drops immersive on the tablet (invisible on a real TV).
+**Intro (`IntroView.kt` + `intro_bg.webp`) — committed:**
+- New **photographic** AL-AYED splash: 3-car hero + tech panels (SYSTEM CHECK / DATA STREAM
+  / ECU STATUS / LIVE DATA) + contacts + Setting/Enter buttons. Source was a WhatsApp-
+  compressed **1600×900** JPEG scaled to 1920×1080, clean encode (earlier sharpen looked
+  "waxy", grain looked "noisy" — the AI/compression is the ceiling; a real full-res source
+  would be sharper).
+- **No brand-logo row** (`logos = emptyArray`). The old "remove Ford+Lexus / redistribute 9
+  logos" work is now moot.
+- **Marques scene trimmed** — intro is Power On → Cars → Emblem → Showtime (~4.75 s).
+- **Focus ring** (`setBtnBox`/`entBtnBox`) fitted to the new buttons; the Setting button was
+  widened ~18 px in the image so both buttons match; boxes symmetric.
+- `IntroView` is full-screen `match_parent` (renders at display resolution), unlike the
+  dashboard (locked to 1920×1080 via `StageLayout`). Design ref: `docs/design-refs/ecu-intro/`.
+- SETTING opens a change-password modal that **only writes SharedPreferences** (decorative).
 
-## Punchlist — what's left (`OPEN_DECISIONS.md` → "Punchlist")
-1. **KiCad front-end board (D4)** — dividers/clamps/buffers, ADS1115, MCP23017, 74HC165,
-   MAX9926, Hall clamps, TVS. **Not started; blocks all real-driver work.** Parts spec'd in
+**Dashboard (`Dashboard.kt`, `MainActivity.kt`, `dashboard.xml`, drawables) — committed:**
+- **Top bar:** removed **Uptime**; added a **Back button** (styled like the DEVICE panel —
+  `bd_line9`, `txt_label`, `ic_back_arrow`) that returns to `IntroActivity`; device status
+  moved into Uptime's slot. Order: **[Back] [DEVICE status] [logo] [VOLTAGE] [CURRENT]**.
+- Removed cell **outlines** from the fan box + IMO/HIP/IAC.
+- **Fans faster:** `ensureFanLoop` target 300 → **1100 °/s** (watch for wagon-wheel aliasing
+  at 60 Hz).
+- **Bright red:** ring `bd_indic_circle_red` → `#FF4A3D` 3px; BAT-ON/SW-ON/MRC-/ETC-ON icons
+  tinted `#FF4A3D`; labels `#ff3b2a` up to 18 px; **IMMO car** tinted `#FF4A3D` and forced
+  always-full-brightness.
+
+## 8. Devices & testing notes
+- **ESP32:** flashed + verified on the real board.
+- **Galaxy Tab S6 Lite (SM-P610, Android 13, USB):** primary verify device. **USB is very
+  flaky** — keeps dropping; when it comes up MTP-only, toggle USB debugging and accept the
+  prompt; use a good cable and the ABSOLUTE apk path. Amber "Eye Comfort" tint in
+  screenshots is the display, not the app. Simulated `DPAD_LEFT` on a touch device advances
+  the intro instead of moving focus.
+- **CBOX 3.0 (Amlogic, Android 9):** tiny internal storage — installs fail ("not enough
+  space", ~320 MB reserve); free space or lower `sys_storage_threshold`. DHCP IP churns
+  (.50→.62→.56…). No SD.
+- **TCL Smart TV Pro (Android 12):** **4K panel but Android UI is firmware-locked to a
+  1920×1080 override** → hardware upscales 1080p→4K (why the intro looks soft); `wm size
+  3840x2160` is rejected/reverted, so 4K rendering can't be forced. IP also churns.
+- To see **live data** on any client, join it to the `ECU_TESTER` Wi-Fi (targets
+  `10.10.10.10`); otherwise it free-runs the `DemoDriver`.
+
+## 9. Punchlist — what's left
+1. **KiCad front-end board (D4)** — not started; blocks all real-driver work. Parts in
    `hardware/README.md`.
-2. **Real acquisition drivers** — `i2c_bus`+`ads1115`+`mcp23017`, `hc165` reader,
-   `ckp_capture` (RMT/GPTimer, 60-2 decode). Replace the sim generators. Blocked on #1.
-3. ~~**App/browser → device COMMAND channel** — `ws_handler` parses 0x80/0x81 + ACK.~~
-   **Firmware DONE 2026-07-20** (recv+validate+dispatch+ACK; COMMAND drives sim
-   overrides, SUBSCRIBE sets rate + waveform on/off; mirrored in `sim_server.py`,
-   verified by `tools/ws_cmd_test.py`). **Left:** a dashboard/app UI that *sends*
-   COMMAND/SUBSCRIBE, and (to make the intro's change-password real) a new
-   AP-password `cmd_id` + NVS creds + reboot.
-4. **Kiosk-reboot autostart** on the real TV (one remaining D9 sub-item; optional
-   `dpm set-device-owner` full lock). Settle: shop-floor TV must permanently rejoin the
-   `ECU_TESTER` AP on boot.
+2. **Real acquisition drivers** (`i2c_bus`+`ads1115`+`mcp23017`, `hc165`, `ckp_capture`
+   RMT/GPTimer 60-2). Blocked on #1.
+3. **A UI that SENDS COMMAND/SUBSCRIBE** — firmware handler ready; nothing drives it yet.
+4. **Real AP-password change** — new `cmd_id` + NVS-backed creds + reboot (intro modal only
+   writes SharedPreferences today).
+5. **Kiosk-reboot autostart** on the real TV (last D9 sub-item).
+- Minor/deferred: protocol-v1 gaps (CTS/IGF/CURRENT zeroed in UIs); Android reconnect ~22 s;
+  a higher-res intro source for sharpness.
 
-**Minor / deferred**
-- (2026-07-16 review) WS concurrent-write race (latent, only if client pings enabled);
-  `ws_broadcast` strike counter inherits across fd reuse (cosmetic, self-healing).
-- (2026-07-19 bench) Android reconnect slow (~22 s — reset EcuSocket backoff harder on
-  network-available); ScopeView scrolls while DISCONNECTED (cosmetic).
-- Protocol v1 gaps if ever wanted: CTS, IGF, CURRENT (zeroed/pinned in both UIs, no wire
-  field).
-- **GitHub issues NOT created** (`gh` not installed + connector needs OAuth). Helper ready:
-  `tools/create_issues.sh` (run after `gh auth login`).
+## 10. House style (CLAUDE.md §7, Karpathy guidelines)
+Think before coding (assumptions, options + a recommendation). Simplicity first, surgical
+changes, match existing style. Define pass/fail then loop build→flash/install→observe→done.
+Don't silently retune `sdkconfig.defaults`/`partitions.csv`/pinmap/Gradle versions. The 4
+protocol mirrors change together in one commit. After meaningful work regenerate
+`pm-sync.json` and commit `chore: sync dashboard` (dashboard import is the user's manual
+step).
 
-## House style (CLAUDE.md §7, Karpathy guidelines)
-Think before coding (state assumptions, options + a recommendation on tradeoffs).
-Simplicity first, no speculative abstractions. Surgical changes only, match existing style.
-Goal-driven: define pass/fail, loop build→flash/install→observe→done. Don't silently retune
-`sdkconfig.defaults`/`partitions.csv`/pinmap/Gradle plugin versions.
-
-## PM / dashboard sync
-After meaningful work: regenerate `pm-sync.json` from `git log` (lastCommit/
-lastCommitDate/lastSync only), commit `chore: sync dashboard`. **Dashboard import is the
-user's manual step** (Dashboard → Import → `pm-sync.json`). A reconciled full backup with
-updated phases/tasks exists at `~/Downloads/iot-pm-backup-2026-07-16-reconciled.json`
-(import optional).
-
-## Persisted memory files (`~/.claude/projects/.../memory/`)
+## 11. Persisted memory (`~/.claude/projects/.../memory/`)
 `idf-build-env.md`, `tv-render-perf.md`, `fps-target-and-loop.md`, `old-tv-es5-compat.md`,
-`android-migration.md` (full D9 history + on-TV verification + the "keep the dev PC online"
-bench method), `android-build-env.md`. These auto-load in future sessions.
+`android-migration.md`, `android-build-env.md` — auto-load in future sessions.
