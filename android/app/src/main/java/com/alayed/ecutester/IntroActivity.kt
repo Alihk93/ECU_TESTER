@@ -21,7 +21,7 @@ import com.alayed.ecutester.ui.IntroView
  * Cinematic intro splash (native port of the Claude Design handoff). Plays once
  * per cold start, over MainActivity, then ENTER hands off to the dashboard.
  * SETTING opens an on-device change-password modal (SharedPreferences, default
- * "0000") — the native equivalent of the web modal in ecu-intro.jsx.
+ * "00000000") — the native equivalent of the web modal in ecu-intro.jsx.
  */
 class IntroActivity : AppCompatActivity() {
 
@@ -127,7 +127,9 @@ class IntroActivity : AppCompatActivity() {
             fun bad(t: String) { msg.text = t; msg.setTextColor(Color.parseColor("#ff7a7a")); msg.visibility = View.VISIBLE }
             when {
                 old != storedPassword() -> bad("Old password is incorrect.")
-                new.length < 4 -> bad("New password must be at least 4 characters.")
+                // >= 8 chars: this password is destined for the WPA2-PSK AP key
+                // (punchlist #4), and WPA2-PSK rejects anything shorter.
+                new.length < 8 -> bad("New password must be at least 8 characters.")
                 new != conf -> bad("Confirmation does not match.")
                 else -> {
                     prefs().edit().putString("ecu_tester_password", new).apply()

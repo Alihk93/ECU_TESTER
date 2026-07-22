@@ -79,9 +79,12 @@ ST_BATTERY, ST_SWITCH, ST_START, ST_ETC, ST_FAN1, ST_FAN2 = 0, 1, 2, 3, 4, 5
 ST_FUEL_PUMP, ST_IMMO_P, ST_IMMO_N, ST_MRC_P, ST_MRC_N = 8, 9, 10, 11, 12
 FIRE_ORDER = (0, 4, 2, 5, 1, 3)  # 1-5-3-6-2-4
 
-# cam events as (crank angle within the 720° cycle, level-after-edge)
-CMP1_EVENTS = ((40.0, 1), (130.0, 0))
-CMP2_EVENTS = ((200.0, 1), (260.0, 0), (500.0, 1), (560.0, 0))
+# cam events as (crank angle within the 720° cycle, level-after-edge). Mirrors the
+# firmware net_task (main.c): CMP1 high on the first crank rev [0,360), CMP2 high on
+# the second [360,720). (WAVEFORM is default-off and unplotted, but keep the two
+# reference generators identical for when scope plotting is restored.)
+CMP1_EVENTS = ((0.0, 1), (360.0, 0))
+CMP2_EVENTS = ((0.0, 0), (360.0, 1))
 
 def clamp_u16(v, hi):
     return max(0, min(int(v + 0.5), hi))

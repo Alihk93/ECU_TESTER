@@ -205,11 +205,15 @@ static uint8_t apply_subscribe(const ecu_subscribe_t *s)
 /* Send an ACK (0x8F) on the requesting socket. */
 static void send_ack(httpd_req_t *req, uint16_t acked_seq, uint8_t status)
 {
+    /* ACKs get their own incrementing envelope seq (sent only from this httpd
+     * thread) so a client can spot a dropped ACK — spec §1 "increments per sent
+     * frame". The payload's acked_seq still echoes the request's seq. */
+    static uint16_t ack_seq = 0;
     uint8_t buf[sizeof(ecu_frame_hdr_t) + sizeof(ecu_ack_t) + 2];
     ecu_frame_hdr_t *h = (ecu_frame_hdr_t *)buf;
     h->magic0 = ECU_PROTO_MAGIC0;  h->magic1 = ECU_PROTO_MAGIC1;
     h->version = ECU_PROTO_VERSION; h->msg_type = MSG_ACK;
-    h->seq = 0;                     h->payload_len = sizeof(ecu_ack_t);
+    h->seq = ack_seq++;             h->payload_len = sizeof(ecu_ack_t);
     ecu_ack_t *a = (ecu_ack_t *)(buf + sizeof(*h));
     a->acked_seq = acked_seq;  a->status = status;
     size_t body = sizeof(*h) + sizeof(ecu_ack_t);
@@ -397,11 +401,16 @@ static void httpd_start_all(void)
  *  continuous back-pressure or a send error evicts the client — the browser
  *  auto-reconnects (websocket.js).
  * ===========================================================================*/
-#define WS_EVICT_STRIKES 240   /* consecutive undeliverable frames ≈ 2 s */
+#define WS_EVICT_US   (2 * 1000 * 1000)   /* evict after ~2 s of continuous back-pressure */
 
 static void ws_broadcast(const uint8_t *frame, size_t len)
 {
-    static uint8_t strikes[FD_SETSIZE];
+    /* µs timestamp of the FIRST undeliverable frame per client (0 = writable).
+     * Time-based, not a frame count: the broadcast rate varies with the SUBSCRIBE
+     * telemetry rate and whether WAVEFORM streaming is on, so a fixed strike count
+     * meant different wall-clock timeouts (a fixed 240 was ~8 s at the 30 Hz
+     * telemetry-only default, not the ~2 s intended). */
+    static int64_t stall_since[FD_SETSIZE];
     if (!s_httpd) return;
     size_t n = 8;                                  /* cfg.max_open_sockets */
     int fds[8];
@@ -425,15 +434,17 @@ static void ws_broadcast(const uint8_t *frame, size_t len)
                   FD_ISSET(fd, &wset) &&
                   httpd_ws_send_frame_async(s_httpd, fd, &f) == ESP_OK;
         if (ok) {
-            strikes[fd] = 0;
+            stall_since[fd] = 0;
             /* WS clients never send after the handshake, so httpd's LRU counter
              * (advanced on RECEIVED traffic) marks them the eviction victim.
              * Touch it on every delivered frame, or a second viewer's burst of
              * asset requests purges the first viewer's live stream. */
             httpd_sess_update_lru_counter(s_httpd, fd);
-        } else if (++strikes[fd] >= WS_EVICT_STRIKES) {
+        } else if (stall_since[fd] == 0) {
+            stall_since[fd] = esp_timer_get_time();          /* first strike: start the clock */
+        } else if (esp_timer_get_time() - stall_since[fd] >= WS_EVICT_US) {
             ESP_LOGW(TAG, "WS fd=%d stalled >2s, evicting", fd);
-            strikes[fd] = 0;
+            stall_since[fd] = 0;
             httpd_sess_trigger_close(s_httpd, fd);
         }
     }
@@ -563,9 +574,8 @@ static void net_task(void *arg)
     ecu_telemetry_t snap;
     uint8_t frame[sizeof(ecu_frame_hdr_t) + sizeof(ecu_telemetry_t) + 2];
 
-    double   crank_deg = 0;              /* absolute integrated crank angle */
+    double   crank_deg = 0;              /* integrated crank angle, wrapped to 720° */
     uint32_t last_us   = (uint32_t)esp_timer_get_time();
-    long     last_fire = 0;
 
     for (;;) {
         /* Telemetry rate is SUBSCRIBE-adjustable (docs/PROTOCOL.md §5); floor at 1 Hz. */
@@ -608,17 +618,23 @@ static void net_task(void *arg)
         }
         if (dps_us > 0) {
             /* Firing events: one cylinder every 120° crank, in firing order.
-               Latched into the telemetry bits "since last frame". */
+               Latched into the telemetry bits "since last frame". Counted within
+               THIS interval (a0..a1); crank_deg is wrapped to 720° below, and
+               720° = 6×120°, so the fire-order phase (e % 6) survives the wrap. */
+            long f0 = (long)floor(a0 / 120.0);
             long f1 = (long)floor(a1 / 120.0);
-            for (long e = last_fire + 1; e <= f1; e++) {
+            for (long e = f0 + 1; e <= f1; e++) {
                 uint8_t cyl = s_fire_order[((e % 6) + 6) % 6];
                 snap.coils   |= (1u << cyl);
                 snap.inj_reg |= (1u << cyl);
                 snap.inj_gdi |= (1u << cyl);
             }
-            last_fire = f1;
         }
-        crank_deg = a1;
+        /* Wrap to the 720° cam cycle so the angle accumulator (and the derived
+           tooth/cam/fire indices) never grow unbounded on long uptime. 720° is a
+           whole number of CKP (360°), CMP (720°) and firing (120°) periods, so the
+           wrap is phase-preserving for all three. */
+        crank_deg = fmod(a1, 720.0);
         last_us   = now;
 
         /* COMMAND coil/injector toggles (docs/PROTOCOL.md §5): held ON regardless
