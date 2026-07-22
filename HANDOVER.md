@@ -61,10 +61,13 @@ exercises the command channel.
   10.10.10.10, LittleFS mounted, dashboard served, boots clean). Re-flashed + verified this
   session — `App version` shows the HEAD commit.
 - **Live data path DONE in SIMULATION:** `acq_task`(core1) generates RPM/analog/status/IAC;
-  `net_task`(core0) integrates crank angle → latched firing bits + edge-lists, broadcasts
-  TELEMETRY ~30 Hz. `ws_broadcast` = non-blocking per-client sends + ~2 s eviction.
+  `net_task`(core0) integrates crank angle (**wrapped to the 720° cam cycle** so the
+  accumulator never grows unbounded) → latched firing bits + edge-lists, broadcasts
+  TELEMETRY ~30 Hz. `ws_broadcast` = non-blocking per-client sends + **time-based ~2 s
+  eviction** (a wall clock, not a frame count, so it holds at any telemetry/waveform rate).
 - **COMMAND/SUBSCRIBE — DONE:** `ws_handler` receives B→S frames, validates
-  magic/version/len/CRC, dispatches, replies ACK. COMMAND drives sim overrides (RPM/analog-mV/
+  magic/version/len/CRC, dispatches, replies ACK (ACK envelope seq now **increments**
+  per §1, matching the sim). COMMAND drives sim overrides (RPM/analog-mV/
   IAC forced; negative value releases to auto; coil/inj/status held toggles); SUBSCRIBE sets
   rate (1–60 Hz) + waveform on/off. Mirrored in `sim_server.py`; verified 6/6 by
   `tools/ws_cmd_test.py`. **No client sends commands yet.**
@@ -97,7 +100,8 @@ landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainA
   widened ~18 px in the image so both buttons match; boxes symmetric.
 - `IntroView` is full-screen `match_parent` (renders at display resolution), unlike the
   dashboard (locked to 1920×1080 via `StageLayout`). Design ref: `docs/design-refs/ecu-intro/`.
-- SETTING opens a change-password modal that **only writes SharedPreferences** (decorative).
+- SETTING opens a change-password modal that **only writes SharedPreferences** (decorative);
+  it now enforces a **≥8-char** minimum to match the WPA2 AP-password key it's destined for.
 
 **Dashboard (`Dashboard.kt`, `MainActivity.kt`, `dashboard.xml`, drawables) — committed:**
 - **Top bar:** removed **Uptime**; added a **Back button** (styled like the DEVICE panel —
@@ -133,7 +137,7 @@ landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainA
    RMT/GPTimer 60-2). Blocked on #1.
 3. **A UI that SENDS COMMAND/SUBSCRIBE** — firmware handler ready; nothing drives it yet.
 4. **Real AP-password change** — new `cmd_id` + NVS-backed creds + reboot (intro modal only
-   writes SharedPreferences today).
+   writes SharedPreferences today, though it now validates the WPA2 ≥8-char minimum).
 5. **Kiosk-reboot autostart** on the real TV (last D9 sub-item).
 - Minor/deferred: protocol-v1 gaps (CTS/IGF/CURRENT zeroed in UIs); Android reconnect ~22 s;
   a higher-res intro source for sharpness.
