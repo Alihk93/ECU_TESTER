@@ -132,8 +132,8 @@ landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainA
   font_scale ≥ 1.0 — the Tab hid it at 0.8); the **diag FPS/link meter bar removed**; and the app
   now has a **launcher icon** — the white AL-AYED wordmark on navy (`@mipmap/ic_launcher`,
   adaptive + legacy round/square at all densities, wired via `android:icon`/`roundIcon`). The
-  wide wordmark is re-stacked on **two balanced lines** (ECU TESTER / AL-AYED, cropped from
-  `logo_w.png` at equal size) so it reads clearly at launcher scale.
+  wide wordmark is re-stacked on **two lines** (ECU TESTER over AL-AYED, cropped from
+  `logo_w.png`) so it reads clearly at launcher scale.
 
 ## 8. Devices & testing notes
 - **ESP32:** flashed + verified on the real board.
