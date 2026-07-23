@@ -3,8 +3,19 @@ package com.alayed.ecutester
 import android.animation.Keyframe
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.PorterDuffXfermode
+import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
@@ -42,6 +53,10 @@ class Dashboard(private val root: View) {
     // built cells
     private class StatusCell(val box: View, val img: ImageView, val red: Boolean)
     private val statusCells = HashMap<String, StatusCell>()
+    private var hipHead: ImageView? = null       // red-hot HIP head overlay (high pressure)
+    private var hipOn: Boolean? = null
+    private val hipTimer = Handler(Looper.getMainLooper())
+    private var hipPressure = false
     private val iacLeds = ArrayList<View>()
 
     // fans: eased angular velocity (soft start-up to top speed, coast-down to stop)
@@ -50,8 +65,15 @@ class Dashboard(private val root: View) {
     private var fanLoopScheduled = false
     private var fanLast = 0L
 
-    private class Indicator(val label: TextView, val circle: View, val img: ImageView, val ring: Int)
+    private class Indicator(
+        val label: TextView, val circle: View, val img: ImageView,
+        val base: String,        // text stem (name minus -ON/-OFF)
+        val relay: Boolean,      // has the two-contact symbol that flips open/closed
+        val fixedText: Boolean,  // MRC+/MRC- keep their text
+    )
     private val indicators = HashMap<String, Indicator>()
+    private var indicatorsOn = false
+    private val indicatorTimer = Handler(Looper.getMainLooper())
 
     private val gauges = HashMap<String, MiniGaugeView>()
 
@@ -69,6 +91,28 @@ class Dashboard(private val root: View) {
         // CTS/IGF have no protocol v1 field — pinned at 0 like the web
         gauges["CTS"]?.setVolts(0f)
         gauges["IGF"]?.setVolts(0f)
+        startHipToggle()
+        startIndicatorToggle()
+    }
+
+    // Demo: pulse the HIP high-pressure head on/off every 10 s (decoupled from the
+    // fuel-pump bit, which the sim holds on). Starts lit, then flips each interval.
+    private fun startHipToggle() {
+        hipPressure = true
+        setHipHead(true)
+        hipTimer.postDelayed(object : Runnable {
+            override fun run() {
+                hipPressure = !hipPressure
+                setHipHead(hipPressure)
+                hipTimer.postDelayed(this, 10_000)
+            }
+        }, 10_000)
+    }
+
+    private fun setHipHead(on: Boolean) {
+        if (hipOn == on) return
+        hipOn = on
+        hipHead?.animate()?.alpha(if (on) 1f else 0f)?.setDuration(300)?.start()
     }
 
     /* ---------------- helpers ---------------- */
@@ -121,6 +165,17 @@ class Dashboard(private val root: View) {
             })
             statusCells[c.key] = StatusCell(box, img, c.red)
 
+            // HIP: a red-hot "head" overlay (top dome), faded in when high pressure is on.
+            if (c.key == "hip") {
+                val head = ImageView(root.context)
+                head.scaleType = ImageView.ScaleType.FIT_CENTER   // same fit -> aligns to base
+                head.setImageBitmap(makeRedHead())
+                head.alpha = 0f
+                box.addView(head, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                hipHead = head
+            }
+
             if (c.leds) {
                 val row = LinearLayout(root.context)
                 row.orientation = LinearLayout.HORIZONTAL
@@ -136,6 +191,31 @@ class Dashboard(private val root: View) {
                 }
             }
         }
+    }
+
+    // Build the "red-hot head" overlay: the pump image tinted red (MULTIPLY keeps the
+    // metallic shading) and masked to just the top dome (the head), fading out at the
+    // neck. Same source + FIT_CENTER as the base image, so it aligns exactly.
+    private fun makeRedHead(): Bitmap {
+        val src = BitmapFactory.decodeResource(res, R.drawable.hip)
+        val w = src.width; val h = src.height
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(out)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        p.colorFilter = PorterDuffColorFilter(color("#FF4A3D"), PorterDuff.Mode.MULTIPLY)
+        cv.drawBitmap(src, 0f, 0f, p)
+        p.colorFilter = null
+        p.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)   // keep only the top dome
+        p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(),
+            intArrayOf(Color.BLACK, Color.BLACK, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.25f, 0.33f), Shader.TileMode.CLAMP)   // dome/head only, clear of the collar
+        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        // also clear the left-hand fuel fitting ("pip"): keep red only right of ~27%
+        p.shader = LinearGradient(0f, 0f, w.toFloat(), 0f,
+            intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.BLACK),
+            floatArrayOf(0f, 0.24f, 0.27f), Shader.TileMode.CLAMP)
+        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        return out
     }
 
     // Plain white number in the top-left corner (no badge box).
@@ -157,19 +237,20 @@ class Dashboard(private val root: View) {
     /* ---------------- indicator row ---------------- */
     private fun buildIndicators() {
         val host = root.findViewById<LinearLayout>(R.id.indicators)
-        data class Cfg(val name: String, val green: Boolean, val img: Int)
+        // base = text stem (name minus -ON/-OFF); relay = flips open/closed.
+        // MRC+/MRC- keep their text (base == name). BAT (battery) + SW (key) don't flip.
+        data class Cfg(val name: String, val base: String, val relay: Boolean, val img: Int)
         val cfgs = listOf(
-            Cfg("BAT-ON", false, R.drawable.bat),
-            Cfg("SW-ON", false, R.drawable.swon2),
-            Cfg("MRC+", true, R.drawable.relay_nc),
-            Cfg("MRC-", false, R.drawable.relay_no),
-            Cfg("ETC-ON", false, R.drawable.relay_no),
-            Cfg("ST-OFF", true, R.drawable.relay_nc),
-            Cfg("PFC-OFF", true, R.drawable.relay_nc),
+            Cfg("BAT-ON", "BAT", false, R.drawable.bat),
+            Cfg("SW-ON", "SW", false, R.drawable.swon2),
+            Cfg("MRC+", "MRC+", true, R.drawable.relay_no),
+            Cfg("MRC-", "MRC-", true, R.drawable.relay_no),
+            Cfg("ETC-ON", "ETC", true, R.drawable.relay_no),
+            Cfg("ST-OFF", "ST", true, R.drawable.relay_no),
+            Cfg("PFC-OFF", "PFC", true, R.drawable.relay_no),
         )
-        // Equal weighted columns (never overflow the panel) + a wrap_content label
-        // sized to fit its ~69px column at 12px — full names show, no clip, no
-        // overflow. (The web fits these at 15px in Chrome; Saira runs a touch wider.)
+        // Equal weighted columns (never overflow the panel); text/color/symbol are
+        // driven by the 10 s startIndicatorToggle (setIndicatorsState), not built here.
         for (c in cfgs) {
             val col = LinearLayout(root.context)
             col.orientation = LinearLayout.VERTICAL
@@ -177,32 +258,51 @@ class Dashboard(private val root: View) {
             host.addView(col, llp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
             val label = TextView(root.context)
-            label.text = c.name
-            label.setSingleLine()          // one line, no hyphen break
+            label.setSingleLine()          // one row
             label.gravity = Gravity.CENTER
             label.setTypeface(label.typeface, Typeface.BOLD)
-            label.setTextColor(if (c.green) color("#55e06a") else color("#ff3b2a"))
-            // Auto-size: fill the column width and shrink the label to the largest
-            // size that fits (10–18px). Bigger, bolder text renders the red solidly
-            // instead of muddy thin anti-aliased strokes. Auto-size still caps at fit.
+            // fit each name to its narrow column on a single line
             androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                 label, 10, 18, 1, android.util.TypedValue.COMPLEX_UNIT_PX)
             col.addView(label, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
             val circle = FrameLayout(root.context)
-            val ring = if (c.green) R.drawable.bd_indic_circle_green else R.drawable.bd_indic_circle_red
-            circle.setBackgroundResource(ring)
             col.addView(circle, LinearLayout.LayoutParams(56, 56).apply { topMargin = 6 })
 
             val img = ImageView(root.context)
             img.scaleType = ImageView.ScaleType.FIT_CENTER
             img.setImageResource(c.img)
-            // red indicators: force the icon to the bright battery red (#FF4A3D)
-            if (!c.green) img.setColorFilter(color("#FF4A3D"), android.graphics.PorterDuff.Mode.SRC_IN)
             circle.addView(img, FrameLayout.LayoutParams(44, 44, Gravity.CENTER))
 
-            indicators[c.name] = Indicator(label, circle, img, ring)
+            indicators[c.name] = Indicator(label, circle, img, c.base, c.relay, c.base == c.name)
+        }
+    }
+
+    // Demo: toggle all seven indicators together every 10 s (overrides live status).
+    //   ON  -> "-ON" text,  red  text+symbol, relay contacts CLOSED (relay_no art)
+    //   OFF -> "-OFF" text, green text+symbol, relay contacts OPEN  (relay_nc art)
+    // MRC+/MRC- keep their text; BAT/SW don't flip their symbol (not relay contacts).
+    private fun startIndicatorToggle() {
+        setIndicatorsState(indicatorsOn)
+        indicatorTimer.postDelayed(object : Runnable {
+            override fun run() {
+                indicatorsOn = !indicatorsOn
+                setIndicatorsState(indicatorsOn)
+                indicatorTimer.postDelayed(this, 10_000)
+            }
+        }, 10_000)
+    }
+
+    private fun setIndicatorsState(on: Boolean) {
+        val tint = if (on) color("#FF4A3D") else color("#55e06a")
+        val ring = if (on) R.drawable.bd_indic_circle_red else R.drawable.bd_indic_circle_green
+        for (ind in indicators.values) {
+            ind.label.text = if (ind.fixedText) ind.base else ind.base + if (on) "-ON" else "-OFF"
+            ind.label.setTextColor(tint)
+            if (ind.relay) ind.img.setImageResource(if (on) R.drawable.relay_no else R.drawable.relay_nc)
+            ind.img.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
+            ind.circle.setBackgroundResource(ring)
         }
     }
 
@@ -361,13 +461,7 @@ class Dashboard(private val root: View) {
         setStatusCell("imo", t.status(Protocol.ST_IMMO_P) || t.status(Protocol.ST_IMMO_N))
         setStatusCell("hip", t.status(Protocol.ST_FUEL_PUMP))
 
-        setIndicator("BAT-ON", t.status(Protocol.ST_BATTERY))
-        setIndicator("SW-ON", t.status(Protocol.ST_SWITCH))
-        setIndicator("MRC+", t.status(Protocol.ST_MRC_P))
-        setIndicator("MRC-", t.status(Protocol.ST_MRC_N))
-        setIndicator("ETC-ON", t.status(Protocol.ST_ETC))
-        setIndicator("ST-OFF", t.status(Protocol.ST_START))
-        setIndicator("PFC-OFF", t.status(Protocol.ST_FUEL_PUMP))
+        // indicator row is driven by the 10 s startIndicatorToggle demo, not telemetry
 
         for (i in 0 until 4) iacLeds[i].setBackgroundResource(
             if ((t.iac ushr i) and 1 == 1) R.drawable.bd_iac_on else R.drawable.bd_iac_off
@@ -382,6 +476,7 @@ class Dashboard(private val root: View) {
         val c = statusCells[key] ?: return
         // IMMO car stays bright red always; other red cells dim when inactive
         c.img.alpha = if (on || key == "imo") 1f else 0.4f
+        // (HIP red-hot head is driven by the 10 s startHipToggle timer, not this bit)
     }
 
     // Soft start / stop: each fan's speed eases toward top (on) or 0 (off); the loop
@@ -406,13 +501,6 @@ class Dashboard(private val root: View) {
                 else fanLoopScheduled = false
             }
         })
-    }
-
-    private fun setIndicator(name: String, on: Boolean) {
-        val ind = indicators[name] ?: return
-        ind.img.alpha = if (on) 1f else 0.45f
-        ind.label.alpha = if (on) 1f else 0.5f
-        ind.circle.setBackgroundResource(if (on) ind.ring else R.drawable.bd_indic_circle_off)
     }
 
     fun setConnected(on: Boolean) {

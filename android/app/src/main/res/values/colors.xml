@@ -5,18 +5,20 @@
     <color name="navy_deep">#22374f</color>
     <color name="bezel">#8f9aa8</color>
 
-    <!-- borders (rgba over navy → #AARRGGBB) -->
-    <color name="line">#73A0BEDC</color>         <!-- rgba(160,190,220,.45) -->
+    <!-- borders. Every panel outline is unified to the main frame's border color
+         (frame_border) so the whole cluster reads as one frame. -->
     <color name="frame_border">#567aa3</color>
+    <color name="line">@color/frame_border</color>          <!-- top-bar panels, status grid, gauges panel -->
+    <color name="border_scope">@color/frame_border</color>  <!-- scope box + plot -->
+    <color name="border_can">@color/frame_border</color>    <!-- CAN plot -->
+    <color name="border_coil">@color/frame_border</color>   <!-- coil bank -->
+    <color name="border_inj">@color/frame_border</color>    <!-- injector bank -->
+    <color name="border_gdi">@color/frame_border</color>    <!-- GDI bank -->
+    <!-- unused leftovers (cells whose outlines were removed per client feedback) -->
     <color name="border_fan">#993FA4FF</color>
     <color name="border_red">#B3FF3C32</color>
     <color name="border_iac">#5996A5B4</color>
-    <color name="border_scope">#52C89650</color>
-    <color name="border_can">#4C5AAA6E</color>
     <color name="border_indic">#593C6EA0</color>
-    <color name="border_coil">#66FF8C32</color>
-    <color name="border_inj">#663FA4FF</color>
-    <color name="border_gdi">#66FF4A3D</color>
     <color name="border_mg">#477A8A9E</color>
 
     <!-- text + LEDs -->
