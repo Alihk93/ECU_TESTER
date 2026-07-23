@@ -3,8 +3,8 @@
   "code": "ECU_TESTER",
   "name": "ECU_TESTER",
   "repo": "Alihk93/ECU_TESTER",
-  "lastCommit": "21fe518 · docs: note the two-line balanced launcher icon in HANDOVER",
-  "lastCommitDate": "2026-07-23T13:25:39+03:00",
+  "lastCommit": "fc7acf2 · revert(android): launcher icon back to the previous two-line version",
+  "lastCommitDate": "2026-07-23T13:31:05+03:00",
   "openIssues": null,
-  "lastSync": "2026-07-23T10:25:39.000Z"
+  "lastSync": "2026-07-23T10:31:05.000Z"
 }
