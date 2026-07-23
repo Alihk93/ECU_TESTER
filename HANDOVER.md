@@ -113,6 +113,16 @@ landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainA
 - **Bright red:** ring `bd_indic_circle_red` → `#FF4A3D` 3px; BAT-ON/SW-ON/MRC-/ETC-ON icons
   tinted `#FF4A3D`; labels `#ff3b2a` up to 18 px; **IMMO car** tinted `#FF4A3D` and forced
   always-full-brightness.
+- **(2026-07-23 demo pass, `Dashboard.kt` + `colors.xml`)** Panel **outlines unified** to
+  the frame-border colour — `line`/`border_scope`/`border_can`/`border_coil`/`border_inj`/
+  `border_gdi` now all `@color/frame_border`, so every box matches the outer frame. Added two
+  **10-second demo toggles that OVERRIDE live status** (the indicator row + HIP no longer show
+  real bits): (1) the **HIP** high-pressure **head** tints red on/off — a red-MULTIPLY overlay
+  of `hip.png` masked (vertical+horizontal `DST_IN` gradients) to just the top dome, clear of
+  the collar and the left fuel fitting; (2) the whole **indicator row** flips ON↔OFF together —
+  text `X-ON`/`X-OFF` (MRC+/MRC- keep their text), red(ON)/green(OFF) text+symbol+ring, and the
+  **5 relay symbols flip closed(ON, `relay_no`)/open(OFF, `relay_nc`)**; BAT/SW keep their icon.
+  Both verified on the Galaxy Tab via `adb exec-out screencap`.
 
 ## 8. Devices & testing notes
 - **ESP32:** flashed + verified on the real board.
