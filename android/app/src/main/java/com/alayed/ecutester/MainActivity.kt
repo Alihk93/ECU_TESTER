@@ -11,10 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.util.Log
-import android.view.Choreographer
 import android.view.View
 import android.view.WindowManager
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.system.exitProcess
 
@@ -38,18 +36,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var dashboard: Dashboard
-    private lateinit var meter: TextView
     private lateinit var socket: EcuSocket
     private lateinit var mapper: LiveMapper
     private lateinit var demo: DemoDriver
     private var liveStarted = false
     private val ui = Handler(Looper.getMainLooper())
 
-    private var frameCount = 0
-    private var lastFpsNs = 0L
-    private var fps = 0
     private var connected = false
-    private var hostLabel = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,10 +64,8 @@ class MainActivity : AppCompatActivity() {
 
         val root = findViewById<View>(android.R.id.content)
         dashboard = Dashboard(root)
-        meter = findViewById(R.id.meter)
 
         val wsUrl = resolveWsUrl()
-        hostLabel = wsUrl.removePrefix("ws://").removeSuffix("/ws")
 
         // Free-run a demo until the first real frame (parity with the web dashboard),
         // so the display looks alive when the ESP32 is off/booting.
@@ -91,7 +82,6 @@ class MainActivity : AppCompatActivity() {
             onStatus = { st ->
                 connected = st == "connected"
                 dashboard.setConnected(connected)
-                updateMeter()
             },
         )
         socket.connect()
@@ -118,27 +108,6 @@ class MainActivity : AppCompatActivity() {
                 ui.postDelayed(this, 1000)
             }
         }, 1000)
-
-        // FPS via the real painted cadence
-        Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
-            override fun doFrame(frameTimeNanos: Long) {
-                frameCount++
-                if (lastFpsNs == 0L) lastFpsNs = frameTimeNanos
-                val dt = frameTimeNanos - lastFpsNs
-                if (dt >= 500_000_000L) {
-                    fps = (frameCount * 1_000_000_000L / dt).toInt()
-                    frameCount = 0; lastFpsNs = frameTimeNanos
-                    updateMeter()
-                }
-                Choreographer.getInstance().postFrameCallback(this)
-            }
-        })
-    }
-
-    private fun updateMeter() {
-        val age = if (mapper.lastTelemetryMs == 0L) "--"
-        else (System.currentTimeMillis() - mapper.lastTelemetryMs).toString()
-        meter.text = "FPS $fps · ${if (connected) "LINK" else "no link"} $hostLabel · WS ${mapper.frames} · age ${age}ms"
     }
 
     override fun onResume() {

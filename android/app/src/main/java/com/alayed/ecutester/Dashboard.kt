@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -131,12 +133,22 @@ class Dashboard(private val root: View) {
         fanBox.orientation = LinearLayout.HORIZONTAL
         fanBox.setPadding(8, 8, 8, 8)
         grid.addView(fanBox, llp(0, mp, 2f))   // spans what the two fan cells did
+        // matte the glossy fan highlights (keep the 3D blade shape): a linear tone
+        // compress — whites capped to ~74%, blacks lifted to ~9% — tones down the
+        // specular sheen without flattening the blades. Shared across both fans.
+        val fanMatte = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+            0.65f, 0f, 0f, 0f, 23f,
+            0f, 0.65f, 0f, 0f, 23f,
+            0f, 0f, 0.65f, 0f, 23f,
+            0f, 0f, 0f, 1f, 0f,
+        )))
         for ((idx, key) in listOf("fan1", "fan2").withIndex()) {
             val cell = FrameLayout(root.context)
             fanBox.addView(cell, llp(0, mp, 1f))
             val img = ImageView(root.context)
             img.scaleType = ImageView.ScaleType.FIT_CENTER
             img.setImageResource(R.drawable.fan)
+            img.colorFilter = fanMatte
             cell.addView(img, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             cell.addView(makeBadge((idx + 1).toString()))
@@ -169,7 +181,7 @@ class Dashboard(private val root: View) {
             if (c.key == "hip") {
                 val head = ImageView(root.context)
                 head.scaleType = ImageView.ScaleType.FIT_CENTER   // same fit -> aligns to base
-                head.setImageBitmap(makeRedHead())
+                head.setImageBitmap(makeHeadOverlay())
                 head.alpha = 0f
                 box.addView(head, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -193,16 +205,16 @@ class Dashboard(private val root: View) {
         }
     }
 
-    // Build the "red-hot head" overlay: the pump image tinted red (MULTIPLY keeps the
-    // metallic shading) and masked to just the top dome (the head), fading out at the
-    // neck. Same source + FIT_CENTER as the base image, so it aligns exactly.
-    private fun makeRedHead(): Bitmap {
+    // Build the head overlay: the pump image tinted blue (MULTIPLY keeps the metallic
+    // shading) and masked to just the top dome (the head), fading out at the neck.
+    // Same source + FIT_CENTER as the base image, so it aligns exactly.
+    private fun makeHeadOverlay(): Bitmap {
         val src = BitmapFactory.decodeResource(res, R.drawable.hip)
         val w = src.width; val h = src.height
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val cv = Canvas(out)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        p.colorFilter = PorterDuffColorFilter(color("#FF4A3D"), PorterDuff.Mode.MULTIPLY)
+        p.colorFilter = PorterDuffColorFilter(color("#3A7DFF"), PorterDuff.Mode.MULTIPLY)
         cv.drawBitmap(src, 0f, 0f, p)
         p.colorFilter = null
         p.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)   // keep only the top dome
@@ -261,9 +273,12 @@ class Dashboard(private val root: View) {
             label.setSingleLine()          // one row
             label.gravity = Gravity.CENTER
             label.setTypeface(label.typeface, Typeface.BOLD)
-            // fit each name to its narrow column on a single line
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                label, 10, 18, 1, android.util.TypedValue.COMPLEX_UNIT_PX)
+            // Fixed px (device-independent inside the 1920x1080 stage), NOT auto-size:
+            // auto-size fell back to fontScale-scaled SP on some devices, so the labels
+            // rendered oversized — overlapping text and pushing into the RPM dial. 14px
+            // fits the widest name (BAT-OFF/ETC-OFF/PFC-OFF, 7 chars) with a gutter.
+            label.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 14f)
+            label.ellipsize = null
             col.addView(label, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
@@ -491,7 +506,7 @@ class Dashboard(private val root: View) {
                 fanLast = now
                 var active = false
                 for (f in fans.values) {
-                    val target = if (f.on) 1100f else 0f         // deg/sec top speed (faster)
+                    val target = if (f.on) 300f else 0f          // deg/sec top speed
                     if (f.speed < target) f.speed = minOf(target, f.speed + 650f * dt)  // brisk spin-up
                     else if (f.speed > target) f.speed = maxOf(target, f.speed - 260f * dt) // coast down
                     if (f.speed > 0.05f) { f.angle = (f.angle + f.speed * dt) % 360f; f.img.rotation = f.angle }

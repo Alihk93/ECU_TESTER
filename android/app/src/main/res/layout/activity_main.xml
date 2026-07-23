@@ -12,18 +12,4 @@
 
         <include layout="@layout/dashboard" />
     </com.alayed.ecutester.ui.StageLayout>
-
-    <!-- diag meter sits OUTSIDE the scaled stage (always crisp) -->
-    <TextView
-        android:id="@+id/meter"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_margin="12dp"
-        android:padding="6dp"
-        android:background="@color/meter_bg"
-        android:fontFamily="monospace"
-        android:textColor="@color/meter_fg"
-        android:textSize="14sp"
-        android:text="FPS -- · no link · WS 0 · age --ms" />
 </FrameLayout>

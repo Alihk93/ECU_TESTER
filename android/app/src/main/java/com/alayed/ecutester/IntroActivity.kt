@@ -12,7 +12,9 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.alayed.ecutester.ui.IntroView
@@ -71,7 +73,7 @@ class IntroActivity : AppCompatActivity() {
 
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(28), d(26), d(28), d(26))
+            setPadding(d(28), d(18), d(28), d(18))
             background = GradientDrawable().apply {
                 cornerRadius = d(14).toFloat()
                 setColor(Color.parseColor("#F00C1622"))
@@ -144,11 +146,18 @@ class IntroActivity : AppCompatActivity() {
             setPadding(0, d(14), 0, 0)
         })
 
-        val wrap = LinearLayout(this).apply {
-            gravity = Gravity.CENTER; setPadding(d(24), d(24), d(24), d(24))
+        // Centre the panel, but inside a ScrollView so it never clips on short
+        // (landscape phone) screens — it centres when there's room, scrolls when not.
+        val inner = LinearLayout(this).apply {
+            gravity = Gravity.CENTER; setPadding(d(20), d(16), d(20), d(16))
             addView(panel, LinearLayout.LayoutParams(d(360), LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        dialog.setContentView(wrap)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(inner, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
+        dialog.setContentView(scroll)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
         dialog.show()
