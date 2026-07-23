@@ -123,6 +123,16 @@ landscape-locked, kiosk plumbing. `IntroActivity` (cold-launch entry) → `MainA
   text `X-ON`/`X-OFF` (MRC+/MRC- keep their text), red(ON)/green(OFF) text+symbol+ring, and the
   **5 relay symbols flip closed(ON, `relay_no`)/open(OFF, `relay_nc`)**; BAT/SW keep their icon.
   Both verified on the Galaxy Tab via `adb exec-out screencap`.
+- **(2026-07-23 polish/robustness pass, `Dashboard.kt`/`IntroActivity.kt`/`MainActivity.kt`/
+  manifest + new `mipmap-*`)** HIP head tint **red → blue** (`#3A7DFF`); **fans back to 300 °/s**
+  and **matted** (a `ColorMatrix` compresses the glossy highlights while keeping the 3D blade
+  shape); the change-password modal is wrapped in a **`ScrollView`** so it never clips on short
+  landscape-phone screens; the **indicator labels use a fixed 14 px** (not auto-size, which fell
+  back to fontScale-scaled SP and overflowed/overlapped + clipped the RPM dial on devices at
+  font_scale ≥ 1.0 — the Tab hid it at 0.8); the **diag FPS/link meter bar removed**; and the app
+  now has a **launcher icon** — the white AL-AYED wordmark on navy (`@mipmap/ic_launcher`,
+  adaptive + legacy round/square at all densities, wired via `android:icon`/`roundIcon`).
+  Note: the wordmark is wide, so it reads small at icon size — a cropped/emblem variant is an option.
 
 ## 8. Devices & testing notes
 - **ESP32:** flashed + verified on the real board.
